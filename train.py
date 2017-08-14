@@ -1,16 +1,16 @@
 import theano
 import theano.tensor as T
-
-import data_io
-import model
 from theano_toolkit.parameters import Parameters
 from theano_toolkit import updates
+import data_io
+import model
+
 
 def data_stream(data_file, word2idx):
     stream = data_io.stream(data_file, word2idx)
     stream = data_io.randomise(stream, buffer_size=300)
-    stream = data_io.sortify(stream, lambda x: x[0].shape[0] + x[1].shape[0])
-    stream = data_io.batch(stream, batch_size=5)
+    stream = data_io.sortify(stream, lambda x: x[0].shape[0])
+    stream = data_io.batch(stream, batch_size=32)
     stream = data_io.randomise(stream, buffer_size=50)
     stream = data_io.arrayify(stream,
                               start_idx=len(word2idx),
@@ -20,20 +20,32 @@ def data_stream(data_file, word2idx):
 
 
 if __name__ == "__main__":
+    data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
     P = Parameters()
     X_1 = T.imatrix('X_1')
     X_2 = T.imatrix('X_2')
 
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    _, cost = model.build(P, embedding_count=len(word2idx) + 2, embedding_size=20)
+    cost, _, _, _ = model.build(P, embedding_count=len(word2idx) + 2,
+                                embedding_size=256)
     recon, kl = cost(X_1.T, X_2.T)
-    loss = recon + kl / T.cast(T.sum(X_1.T[1:]), 'float32')
+    count = T.cast(T.sum(T.neq(X_1, -1).T[1:]), 'float32')
+    loss = (recon + kl) / count
     parameters = P.values()
     gradients = T.grad(loss, wrt=parameters)
+    P_train = Parameters()
     train = theano.function(
         inputs=[X_1, X_2],
-        outputs=loss,
-        updates=updates.adam(parameters,gradients)
+        outputs=[recon / count, kl / X_1.shape[0]],
+        updates=updates.adam(parameters, gradients,
+                             learning_rate=3e-4, P=P_train)
     )
-    for batch_1, batch_2 in data_stream('data/train.txt', word2idx):
+
+    i = 0
+    for batch_1, batch_2 in data_stream(data_location, word2idx):
         print train(batch_1, batch_2)
+        i += 1
+        if i % 100:
+            P.save('model.pkl')
+            P_train.save('train.pkl')
+            i = 0

@@ -4,6 +4,7 @@ import threading
 import Queue
 import numpy as np
 
+
 def stream(data_file, word2idx):
     unk_idx = len(word2idx)
     for line in open(data_file):
@@ -108,7 +109,7 @@ def load_dictionary(dict_file):
 if __name__ == "__main__":
     from collections import Counter
 
-    tokens = Counter(w for line in open('data/train.txt')
+    tokens = Counter(w for line in open('/data/lisa/data/sheny/ParaNews/train.txt')
                      for w in line.strip().split())
     dictionary = [w for w, c in tokens.most_common(10000)
                   if c > 1]

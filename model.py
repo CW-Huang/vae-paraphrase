@@ -2,9 +2,9 @@ import numpy as np
 import lstm
 import theano.tensor as T
 import theano
-import feedforward
 import vae
 import theano_toolkit.utils as U
+import feedforward
 
 
 def softmax(x, axis=-1):
@@ -67,10 +67,11 @@ def build_bilstm(P, input_size, hidden_size):
         return cells_f, hiddens_f, cells_b, hiddens_b
     return process
 
-def build_encoder(P, hidden_size, embedding_size):
+
+def build_encoder(P, hidden_size, embedding_size, latent_size):
     bilstm = build_bilstm(P, embedding_size, hidden_size)
-    P.W_encode_transform_f = np.random.randn(hidden_size, hidden_size)
-    P.W_encode_transform_b = np.random.randn(hidden_size, hidden_size)
+    P.W_encode_transform_f = np.random.randn(hidden_size, latent_size)
+    P.W_encode_transform_b = np.random.randn(hidden_size, latent_size)
 
     def encode(embeddings, mask):
         _, hiddens_f, _, hiddens_b = bilstm(embeddings, mask)
@@ -96,9 +97,21 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
     )
     P.b_decoder_output = np.zeros((embedding_count,))
 
-    def initial(batch_size):
-        init_hidden = T.zeros((hidden_size,))
-        init_cell = T.zeros((hidden_size,))
+    P.W_init_hidden = feedforward.initial_weights(latent_size, embedding_size)
+    P.W_init_cell = feedforward.initial_weights(latent_size, embedding_size)
+
+    def make_step(latent):
+        def _step(mask, embedding,
+                  prev_cell, prev_hidden):
+            cell, hidden = lstm_step(embedding, latent, prev_cell, prev_hidden)
+            cell = T.switch(mask, cell, prev_cell)
+            hidden = T.switch(mask, hidden, prev_hidden)
+            return cell, hidden
+        return _step
+
+    def initial(batch_size, latent):
+        init_hidden = T.tanh(T.dot(latent, P.W_init_hidden))
+        init_cell = T.dot(latent, P.W_init_cell)
 
         init_hidden = T.tanh(init_hidden)
         init_cell = init_cell
@@ -108,15 +121,9 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
                 init_hidden_batch)
 
     def decode(mask, embeddings, latent):
-        def _step(mask, embedding,
-                  prev_cell, prev_hidden):
-            cell, hidden = lstm_step(embedding, latent, prev_cell, prev_hidden)
-            cell = T.switch(mask, cell, prev_cell)
-            hidden = T.switch(mask, hidden, prev_hidden)
-            return cell, hidden
-
+        _step = make_step(latent)
         (init_cell_batch,
-         init_hidden_batch) = initial(embeddings.shape[1])
+         init_hidden_batch) = initial(embeddings.shape[1], latent)
         mask = mask[:, :, None]
         [cells, hiddens], _ = theano.scan(
             _step,
@@ -127,17 +134,18 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
 
         lin_output = T.dot(hiddens, P.embedding.T) + P.b_decoder_output
         return lin_output
-    return decode
+    return decode, initial, make_step
 
 
 def build(P, embedding_size, embedding_count):
-    hidden_size = embedding_size
-    latent_size = hidden_size
+    hidden_size = 256
+    latent_size = 256
     P.embedding = np.random.randn(embedding_count,
                                   embedding_size)
 
-    encode = build_encoder(P, hidden_size, embedding_size)
-    decode = build_decoder(P, embedding_count, embedding_size, latent_size)
+    encode = build_encoder(P, hidden_size, embedding_size, latent_size)
+    decode, initial, make_step = build_decoder(P, embedding_count,
+                                               embedding_size, latent_size)
 
     def encode_decode(X_1):
         mask_1 = T.neq(X_1, -1)
@@ -146,16 +154,34 @@ def build(P, embedding_size, embedding_count):
         lin_output = decode(mask_1[:-1], embeddings_1[:-1], z_sample)
         return lin_output, z_mean, z_std
 
-    def cost(X_1, X_2):
+    def prior(X_2):
         mask_2 = T.neq(X_2, -1)
         embeddings_2 = P.embedding[X_2]
-        _, z_prior_mean, z_prior_std = encode(embeddings_2, mask_2)
+        z_prior_sample, z_prior_mean, z_prior_std = encode(
+            embeddings_2, mask_2)
+        return z_prior_sample, z_prior_mean, z_prior_std
+
+    def cost(X_1, X_2):
+        _, z_prior_mean, z_prior_std = prior(X_2)
         lin_output, z_mean, z_std = encode_decode(X_1)
         kl = T.sum(vae.kl_divergence(z_mean, z_std, z_prior_mean, z_prior_std),
                    axis=0)
         recon = T.sum(recon_cost(lin_output, X_1[1:]))
         return recon, kl
-    return encode_decode, cost
+
+    def sample_prior(X_2):
+        z_prior_sample, _, _ = prior(X_2)
+        return z_prior_sample
+
+    def sample_step(z_sample, x, prev_cell, prev_hidden):
+        step = make_step(z_sample)
+        cell, hidden = step([1], P.embedding[x], prev_cell, prev_hidden)
+        probs = T.nnet.softmax(
+            T.dot(hidden, P.embedding.T) + P.b_decoder_output
+        )
+        return probs, cell, hidden
+    return cost, initial, sample_prior, sample_step
+
 
 def recon_cost(output_lin, labels):
     output = T.nnet.softmax(
