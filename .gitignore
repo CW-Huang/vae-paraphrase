@@ -1,0 +1,4 @@
+*.sw*
+*.pkl
+data
+*.pyc
