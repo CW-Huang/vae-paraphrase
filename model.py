@@ -32,9 +32,9 @@ def build_bilstm(P, input_size, hidden_size):
               prev_cell_b, prev_hidden_b):
         cell_f, hidden_f = lstm_step_f(embedding_f, prev_cell_f, prev_hidden_f)
         cell_b, hidden_b = lstm_step_b(embedding_b, prev_cell_b, prev_hidden_b)
-        cell_f = T.switch(mask_f, cell_f, prev_cell_f)
+        cell_f = cell_f # T.switch(mask_f, cell_f, prev_cell_f)
         cell_b = T.switch(mask_b, cell_b, prev_cell_b)
-        hidden_f = T.switch(mask_f, hidden_f, prev_hidden_f)
+        hidden_f = hidden_f # T.switch(mask_f, hidden_f, prev_hidden_f)
         hidden_b = T.switch(mask_b, hidden_b, prev_hidden_b)
         return cell_f, hidden_f, cell_b, hidden_b
 
@@ -64,7 +64,7 @@ def build_bilstm(P, input_size, hidden_size):
                           init_cell_batch,
                           init_hidden_batch],
         )
-        return cells_f, hiddens_f, cells_b, hiddens_b
+        return cells_f, hiddens_f, cells_b[::-1], hiddens_b[::-1]
     return process
 
 
@@ -129,7 +129,7 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
             _step,
             sequences=[mask, embeddings],
             outputs_info=[init_cell_batch,
-                          init_hidden_batch]
+                          init_hidden_batch],
         )
 
         lin_output = T.dot(hiddens, P.embedding.T) + P.b_decoder_output

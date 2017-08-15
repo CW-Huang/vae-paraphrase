@@ -8,9 +8,10 @@ import model
 
 def data_stream(data_file, word2idx):
     stream = data_io.stream(data_file, word2idx)
-    stream = data_io.randomise(stream, buffer_size=300)
-    stream = data_io.sortify(stream, lambda x: x[0].shape[0])
-    stream = data_io.batch(stream, batch_size=32)
+    stream = data_io.randomise(stream, buffer_size=512)
+    stream = data_io.sortify(stream, lambda x: x[0].shape[0],
+                             buffer_size=256)
+    stream = data_io.batch(stream, batch_size=64)
     stream = data_io.randomise(stream, buffer_size=50)
     stream = data_io.arrayify(stream,
                               start_idx=len(word2idx),
@@ -36,16 +37,17 @@ if __name__ == "__main__":
     P_train = Parameters()
     train = theano.function(
         inputs=[X_1, X_2],
-        outputs=[recon / count, kl / X_1.shape[0]],
+        outputs=[recon / count, kl / T.cast(X_1.shape[0], 'float32')],
         updates=updates.adam(parameters, gradients,
-                             learning_rate=3e-4, P=P_train)
+                             learning_rate=1e-3, P=P_train),
     )
 
     i = 0
     for batch_1, batch_2 in data_stream(data_location, word2idx):
         print train(batch_1, batch_2)
         i += 1
-        if i % 100:
+        if i % 100 == 0:
+            print "Saving"
             P.save('model.pkl')
             P_train.save('train.pkl')
             i = 0

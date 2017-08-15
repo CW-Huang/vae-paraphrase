@@ -80,7 +80,7 @@ def build_step(P, name, input_sizes, hidden_size):
             sum(T.dot(x, W[i, 'f']) for i, x in enumerate(inputs)) +
             T.dot(prev_hidden, V['h', 'f']) +
             T.dot(prev_cell, V['c', 'f']) +
-            b['f']
+            b['f'] + 2.5
         )
 
         cell_ = T.tanh(
@@ -117,5 +117,3 @@ if __name__ == "__main__":
         np.random.randn(1, 20)
     )
     T.grad(T.sum(output), wrt=P.values())
-
-

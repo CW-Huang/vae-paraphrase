@@ -34,7 +34,7 @@ def build(P, name,
 
 
 def gaussian_nll(X, mean, std):
-    return 0.5 * T.sum(
+    return np.float32(0.5) * T.sum(
             np.log(2 * np.pi) + 2 * T.log(std) +
             T.sqr(X - mean) / T.sqr(std), axis=-1
         )
@@ -42,11 +42,13 @@ def gaussian_nll(X, mean, std):
 
 def kl_divergence(mean, std, prior_mean, prior_std):
 
-    return 0.5 * T.sum(
-            2 * T.log(prior_std) - 2 * T.log(std) +
+    output = np.float32(0.5) * T.sum(
+            np.float32(2) * T.log(prior_std) - np.float32(2) * T.log(std) +
             ((T.sqr(std) + T.sqr(mean - prior_mean)) /
-                T.sqr(prior_std)) - 1, axis=-1
+                T.sqr(prior_std)) - np.float32(1), axis=-1
         )
+    print "kl_divergence", output.dtype
+    return output
 
 
 def build_inferer(P, name, input_sizes, hidden_sizes, output_size,
