@@ -14,13 +14,13 @@ def softmax(x, axis=-1):
 
 
 def build_bilstm(P, input_size, hidden_size):
-    lstm_step_f = lstm.build_step(
+    lstm_step_f, non_sequences_f = lstm.build_step(
         P, name="lstm_forward",
         input_sizes=[input_size],
         hidden_size=hidden_size,
     )
 
-    lstm_step_b = lstm.build_step(
+    lstm_step_b, non_sequences_b = lstm.build_step(
         P, name="lstm_backward",
         input_sizes=[input_size],
         hidden_size=hidden_size,
@@ -29,9 +29,13 @@ def build_bilstm(P, input_size, hidden_size):
     def _step(mask_f, mask_b,
               embedding_f, embedding_b,
               prev_cell_f, prev_hidden_f,
-              prev_cell_b, prev_hidden_b):
-        cell_f, hidden_f = lstm_step_f(embedding_f, prev_cell_f, prev_hidden_f)
-        cell_b, hidden_b = lstm_step_b(embedding_b, prev_cell_b, prev_hidden_b)
+              prev_cell_b, prev_hidden_b, *non_sequences):
+        f_non_seq = non_sequences[:len(non_sequences_f)]
+        b_non_seq = non_sequences[len(non_sequences_f):]
+        cell_f, hidden_f = lstm_step_f(embedding_f, prev_cell_f, prev_hidden_f,
+                                       *f_non_seq)
+        cell_b, hidden_b = lstm_step_b(embedding_b, prev_cell_b, prev_hidden_b,
+                                       *b_non_seq)
         cell_f = cell_f # T.switch(mask_f, cell_f, prev_cell_f)
         cell_b = T.switch(mask_b, cell_b, prev_cell_b)
         hidden_f = hidden_f # T.switch(mask_f, hidden_f, prev_hidden_f)
@@ -63,6 +67,8 @@ def build_bilstm(P, input_size, hidden_size):
                           init_hidden_batch,
                           init_cell_batch,
                           init_hidden_batch],
+            non_sequences=non_sequences_f + non_sequences_b,
+            strict=True
         )
         return cells_f, hiddens_f, cells_b[::-1], hiddens_b[::-1]
     return process
@@ -90,7 +96,7 @@ def build_encoder(P, hidden_size, embedding_size, latent_size):
 
 def build_decoder(P, embedding_count, embedding_size, latent_size):
     hidden_size = embedding_size
-    lstm_step = lstm.build_step(
+    lstm_step, non_sequences = lstm.build_step(
         P, name="lstm_decoder",
         input_sizes=[embedding_size, latent_size],
         hidden_size=hidden_size,
@@ -100,14 +106,14 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
     P.W_init_hidden = feedforward.initial_weights(latent_size, embedding_size)
     P.W_init_cell = feedforward.initial_weights(latent_size, embedding_size)
 
-    def make_step(latent):
-        def _step(mask, embedding,
-                  prev_cell, prev_hidden):
-            cell, hidden = lstm_step(embedding, latent, prev_cell, prev_hidden)
-            cell = T.switch(mask, cell, prev_cell)
-            hidden = T.switch(mask, hidden, prev_hidden)
-            return cell, hidden
-        return _step
+    def _step(mask, embedding,
+              prev_cell, prev_hidden,
+              latent, *non_seq):
+        cell, hidden = lstm_step(embedding, latent, prev_cell, prev_hidden,
+                                 *non_seq)
+        cell = T.switch(mask, cell, prev_cell)
+        hidden = T.switch(mask, hidden, prev_hidden)
+        return cell, hidden
 
     def initial(batch_size, latent):
         init_hidden = T.tanh(T.dot(latent, P.W_init_hidden))
@@ -121,20 +127,18 @@ def build_decoder(P, embedding_count, embedding_size, latent_size):
                 init_hidden_batch)
 
     def decode(mask, embeddings, latent):
-        _step = make_step(latent)
-        (init_cell_batch,
-         init_hidden_batch) = initial(embeddings.shape[1], latent)
         mask = mask[:, :, None]
         [cells, hiddens], _ = theano.scan(
             _step,
             sequences=[mask, embeddings],
-            outputs_info=[init_cell_batch,
-                          init_hidden_batch],
+            outputs_info=initial(embeddings.shape[1], latent),
+            non_sequences=[latent] + non_sequences,
+            strict=True
         )
 
         lin_output = T.dot(hiddens, P.embedding.T) + P.b_decoder_output
         return lin_output
-    return decode, initial, make_step
+    return decode, initial, _step
 
 
 def build(P, embedding_size, embedding_count):
