@@ -88,7 +88,7 @@ def build(P, name, input_size, window_size):
             X.dimshuffle(0, 2, 'x', 1),
             (False, False, False, False)
         )
-        seq_mask = mask.dimshuffle(1, 0, 'x', 'x')
+        seq_mask = mask.dimshuffle(1, 0, 'x', 'x', 'x')
         len_mask = mask.dimshuffle(0, 'x', 'x', 1)
         [outputs, gates], _ = theano.scan(
             _step,
