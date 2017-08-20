@@ -84,7 +84,6 @@ def build_step(P, name, input_sizes, hidden_size, strict=False):
          W_h_c,
          W_h_o, W_c_o), args = args[:7], args[7:]
         (b_i, b_f, b_c, b_o) = args
-
         i_gate = T.nnet.sigmoid(
             sum(T.dot(x, W_x_i[i]) for i, x in enumerate(inputs)) +
             T.dot(prev_hidden, W_h_i) + T.dot(prev_cell, W_c_i) +
@@ -93,7 +92,8 @@ def build_step(P, name, input_sizes, hidden_size, strict=False):
 
         f_gate = T.nnet.sigmoid(
             sum(T.dot(x, W_x_f[i]) for i, x in enumerate(inputs)) +
-            T.dot(prev_hidden, W_h_f) + T.dot(prev_cell, W_c_f) +
+            T.dot(prev_hidden, W_h_f) +
+            T.dot(prev_cell, W_c_f) +
             b_f
         )
 
