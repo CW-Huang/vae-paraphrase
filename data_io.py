@@ -11,7 +11,8 @@ def stream(data_file, word2idx):
         lines = line.strip().split('\t')
         line_idxs = []
         for line in lines:
-            idxs = np.array([word2idx.get(w, unk_idx) for w in line.split()],
+            tokens = line.split()
+            idxs = np.array([word2idx.get(w, unk_idx) for w in tokens],
                             dtype=np.int16)
             line_idxs.append(idxs)
         if len(line_idxs) == 2:
@@ -109,8 +110,10 @@ def load_dictionary(dict_file):
 if __name__ == "__main__":
     from collections import Counter
 
-    tokens = Counter(w for line in open('/data/lisa/data/sheny/ParaNews/train.txt')
-                     for w in line.strip().split())
+    tokens = Counter(
+        w for line in open('/data/lisa/data/sheny/ParaNews/train.txt')
+        for w in line.strip().split()
+    )
     dictionary = [w for w, c in tokens.most_common(10000)
                   if c > 1]
     dictionary.sort()

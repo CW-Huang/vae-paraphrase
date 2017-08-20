@@ -4,13 +4,21 @@ from theano_toolkit.parameters import Parameters
 from theano_toolkit import updates
 import data_io
 import model
+import itertools
 
 
 def data_stream(data_file, word2idx):
     stream = data_io.stream(data_file, word2idx)
+    stream = itertools.ifilter(
+        lambda x: x[0].shape[0] < 150 and x[1].shape[0] < 150,
+        stream
+    )
     stream = data_io.randomise(stream, buffer_size=512)
-    stream = data_io.sortify(stream, lambda x: x[0].shape[0],
-                             buffer_size=256)
+    stream = data_io.sortify(
+        stream,
+        key=lambda x: x[0].shape[0] + x[1].shape[0],
+        buffer_size=256
+    )
     stream = data_io.batch(stream, batch_size=64)
     stream = data_io.randomise(stream, buffer_size=50)
     stream = data_io.arrayify(stream,
@@ -39,15 +47,17 @@ if __name__ == "__main__":
         inputs=[X_1, X_2],
         outputs=[recon / count, kl / T.cast(X_1.shape[0], 'float32')],
         updates=updates.adam(parameters, gradients,
-                             learning_rate=1e-3, P=P_train),
+                             learning_rate=3e-4, P=P_train),
     )
 
     i = 0
-    for batch_1, batch_2 in data_stream(data_location, word2idx):
-        print train(batch_1, batch_2)
-        i += 1
-        if i % 100 == 0:
-            print "Saving"
-            P.save('model.pkl')
-            P_train.save('train.pkl')
-            i = 0
+    for i in xrange(50):
+        for batch_1, batch_2 in data_stream(data_location, word2idx):
+            print batch_1.shape, batch_2.shape,
+            print train(batch_1, batch_2)
+            i += 1
+            if i % 1000 == 0:
+                print "Saving"
+                P.save('model.pkl')
+                P_train.save('train.pkl')
+                i = 0

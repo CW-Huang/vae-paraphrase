@@ -47,7 +47,6 @@ def kl_divergence(mean, std, prior_mean, prior_std):
             ((T.sqr(std) + T.sqr(mean - prior_mean)) /
                 T.sqr(prior_std)) - np.float32(1), axis=-1
         )
-    print "kl_divergence", output.dtype
     return output
 
 
