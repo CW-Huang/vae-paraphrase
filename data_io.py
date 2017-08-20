@@ -98,9 +98,9 @@ def arrayify(stream, start_idx, end_idx):
             batch_tuple.append(batch_idxs)
         yield tuple(batch_tuple)
 
+
 def arrayify2(stream, start_idx, end_idx):
     for batch_ in stream:
-        batch_tuple = []
         batch = [f[0] for f in batch_] + [f[1] for f in batch_]
         batch_idxs = np.zeros((
             len(batch),
@@ -110,9 +110,7 @@ def arrayify2(stream, start_idx, end_idx):
         for i, s in enumerate(batch):
             batch_idxs[i, 1:s.shape[0] + 1] = s
             batch_idxs[i, s.shape[0] + 1] = end_idx
-        batch_tuple.append(batch_idxs)
-        yield tuple(batch_tuple)
-
+        yield batch_idxs
 
 
 def load_dictionary(dict_file):

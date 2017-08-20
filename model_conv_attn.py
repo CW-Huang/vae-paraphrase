@@ -1,10 +1,7 @@
 import numpy as np
-import lstm
 import theano.tensor as T
-import theano
 import vae
 import theano_toolkit.utils as U
-import feedforward
 import gated_seq_conv
 import attn_decoder
 
@@ -41,6 +38,7 @@ def build_decoder(P, embedding_size, latent_size):
         latent_size=latent_size
     )
     P.b_output = np.zeros((P.embedding.get_value().shape[0],))
+
     def decode(mask, embeddings, latent):
         mask_src = mask
         mask_dst = mask[:, :-1]

@@ -11,7 +11,7 @@ def data_stream(data_file, word2idx):
     stream = data_io.randomise(stream, buffer_size=512)
     stream = data_io.sortify(stream, lambda x: x[0].shape[0],
                              buffer_size=256)
-    stream = data_io.batch(stream, batch_size=64)
+    stream = data_io.batch(stream, batch_size=16)
     stream = data_io.randomise(stream, buffer_size=50)
     stream = data_io.arrayify2(stream,
                                start_idx=len(word2idx),
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         inputs=[X_12],
         outputs=[recon / count, kl / T.cast(X_12.shape[0] // 2, 'float32')],
         updates=updates.adam(parameters, gradients,
-                             learning_rate=1e-3, P=P_train),
+                             learning_rate=3e-4, P=P_train),
     )
 
     i = 0

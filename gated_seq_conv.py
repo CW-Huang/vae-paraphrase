@@ -3,8 +3,6 @@ import theano.tensor as T
 import numpy as np
 import scipy.linalg
 
-import theano_toolkit.utils as U
-
 
 def weight_init(input_size, output_size, window_size):
     factor = 1
@@ -19,7 +17,6 @@ def weight_init(input_size, output_size, window_size):
     )
 
 
-
 def transition_init(size):
     return scipy.linalg.orth(np.random.randn(size, size))
 
@@ -32,6 +29,7 @@ def build_1d_conv(P, name, input_size, output_size, window_size,
     P["b_%s" % name] = b
     W = P["W_%s" % name]
     b = P["b_%s" % name].dimshuffle('x', 0, 'x', 'x')
+
     def conv(x, W=W, b=b, shuffle_dim=True):
         if shuffle_dim:
             x = x.dimshuffle(0, 2, 'x', 1)
@@ -42,7 +40,6 @@ def build_1d_conv(P, name, input_size, output_size, window_size,
             output = output.dimshuffle(2, 0, 3, 1)[0]
         return output
     return conv, [W, b]
-
 
 
 def build_op(P, name, input_size, window_size):
@@ -78,10 +75,11 @@ def build(P, name, input_size, window_size):
         window_size=window_size,
     )
 
-    def _step(prev_state, mask, W, b):
-        prev_state, gate = gated_conv(prev_state, W, b, shuffle_dim=False)
-        return T.switch(mask, prev_state, 0), gate
-
+    def _step(mask, prev_state, mask_length, W, b):
+        state, gate = gated_conv(prev_state, W, b, shuffle_dim=False)
+        state = T.switch(mask, state, prev_state)
+        state = T.switch(mask_length, prev_state, 0)
+        return state, gate
 
     def process(X, mask, times=None, training=True):
         if times is None:
@@ -90,12 +88,13 @@ def build(P, name, input_size, window_size):
             X.dimshuffle(0, 2, 'x', 1),
             (False, False, False, False)
         )
+        seq_mask = mask.dimshuffle(1, 0, 'x', 'x')
         mask = mask.dimshuffle(0, 'x', 'x', 1)
         [outputs, gates], _ = theano.scan(
             _step,
+            sequences=[seq_mask],
             outputs_info=[X, None],
             non_sequences=[mask] + params,
-            n_steps=times,
             strict=True
         )
         # outputs : time x batch_size x hidden_size x 1 x length
