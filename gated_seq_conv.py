@@ -75,10 +75,10 @@ def build(P, name, input_size, window_size):
         window_size=window_size,
     )
 
-    def _step(mask, prev_state, mask_length, W, b):
+    def _step(seq_mask, prev_state, len_mask, W, b):
         state, gate = gated_conv(prev_state, W, b, shuffle_dim=False)
-        state = T.switch(mask, state, prev_state)
-        state = T.switch(mask_length, prev_state, 0)
+        state = T.switch(seq_mask, state, prev_state)
+        state = T.switch(len_mask, state, 0)
         return state, gate
 
     def process(X, mask, times=None, training=True):
@@ -89,12 +89,12 @@ def build(P, name, input_size, window_size):
             (False, False, False, False)
         )
         seq_mask = mask.dimshuffle(1, 0, 'x', 'x')
-        mask = mask.dimshuffle(0, 'x', 'x', 1)
+        len_mask = mask.dimshuffle(0, 'x', 'x', 1)
         [outputs, gates], _ = theano.scan(
             _step,
             sequences=[seq_mask],
             outputs_info=[X, None],
-            non_sequences=[mask] + params,
+            non_sequences=[len_mask] + params,
             strict=True
         )
         # outputs : time x batch_size x hidden_size x 1 x length
