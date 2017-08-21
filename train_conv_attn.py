@@ -4,10 +4,15 @@ from theano_toolkit.parameters import Parameters
 from theano_toolkit import updates
 import data_io
 import model_conv_attn
+import itertools
 
 
 def data_stream(data_file, word2idx):
     stream = data_io.stream(data_file, word2idx)
+    stream = itertools.ifilter(
+        lambda x: x[0].shape[0] <= 126 and x[1].shape[0] <= 126,
+        stream
+    )
     stream = data_io.randomise(stream, buffer_size=512)
     stream = data_io.sortify(stream, lambda x: x[0].shape[0],
                              buffer_size=256)
@@ -46,7 +51,7 @@ if __name__ == "__main__":
 
     i = 0
     for batch in data_stream(data_location, word2idx):
-        print train(batch)
+        print batch.shape, train(batch)
         i += 1
         if i % 100 == 0:
             print "Saving"
