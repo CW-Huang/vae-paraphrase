@@ -36,9 +36,9 @@ def build_bilstm(P, input_size, hidden_size):
                                        *f_non_seq)
         cell_b, hidden_b = lstm_step_b(embedding_b, prev_cell_b, prev_hidden_b,
                                        *b_non_seq)
-        cell_f = cell_f # T.switch(mask_f, cell_f, prev_cell_f)
+        cell_f = cell_f  # T.switch(mask_f, cell_f, prev_cell_f)
         cell_b = T.switch(mask_b, cell_b, prev_cell_b)
-        hidden_f = hidden_f # T.switch(mask_f, hidden_f, prev_hidden_f)
+        hidden_f = hidden_f  # T.switch(mask_f, hidden_f, prev_hidden_f)
         hidden_b = T.switch(mask_b, hidden_b, prev_hidden_b)
         return cell_f, hidden_f, cell_b, hidden_b
 

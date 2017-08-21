@@ -40,15 +40,16 @@ if __name__ == "__main__":
     count = T.cast(T.sum(T.neq(X_1, -1).T[1:]), 'float32')
     loss = (recon + kl) / count
     parameters = P.values()
-    gradients = T.grad(loss, wrt=parameters)
+    gradients = updates.clip_deltas(T.grad(loss, wrt=parameters), 5)
     P_train = Parameters()
     train = theano.function(
         inputs=[X_12],
         outputs=[recon / count, kl / T.cast(X_12.shape[0] // 2, 'float32')],
         updates=updates.adam(parameters, gradients,
-                             learning_rate=3e-4, P=P_train),
+                             learning_rate=1e-4, P=P_train),
     )
-
+    # P.load('model.pkl')
+    # P_train.load('train.pkl')
     i = 0
     for batch in data_stream(data_location, word2idx):
         print batch.shape, train(batch)

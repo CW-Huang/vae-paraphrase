@@ -2,8 +2,6 @@ import numpy as np
 import lstm
 import theano.tensor as T
 import theano
-import vae
-import theano_toolkit.utils as U
 import feedforward
 
 
@@ -24,8 +22,11 @@ def build_decoder(P, embedding_size, latent_size):
         input_sizes=[embedding_size, latent_size],
         hidden_size=hidden_size,
     )
-    P.init_hidden = np.zeros((hidden_size,))
-    P.init_cell = np.zeros((hidden_size,))
+
+    P.W_init_hidden = feedforward.initial_weights(latent_size, hidden_size)
+    P.b_init_hidden = np.zeros((hidden_size,))
+    P.W_init_cell = feedforward.initial_weights(latent_size, hidden_size)
+    P.b_init_cell = np.zeros((hidden_size,))
 
     W_val = feedforward.initial_weights(
         input_size=hidden_size + embedding_size + latent_size,
@@ -47,7 +48,6 @@ def build_decoder(P, embedding_size, latent_size):
     b_ah = P.b_attn_hidden
     w_a = P.w_attn_out
 
-
     def _step(mask_dest, embedding,
               prev_cell, prev_hidden,
               mask_src, latent,
@@ -68,21 +68,18 @@ def build_decoder(P, embedding_size, latent_size):
 
         context = T.sum(latent * attn, axis=1)
 
-
         cell, hidden = lstm_step(embedding, context, prev_cell, prev_hidden,
                                  *non_seq)
         cell = T.switch(mask_dest, cell, prev_cell)
         hidden = T.switch(mask_dest, hidden, prev_hidden)
         return cell, hidden
 
-    def initial(batch_size):
-        init_hidden = P.init_hidden
-        init_cell = P.init_cell
-
-        init_hidden = T.tanh(init_hidden)
-        init_cell = init_cell
-        init_hidden_batch = T.alloc(init_hidden, batch_size, hidden_size)
-        init_cell_batch = T.alloc(init_cell, batch_size, hidden_size)
+    def initial(batch_size, latent):
+        first_slot = latent[:, 0]
+        init_hidden_batch = T.tanh(T.dot(first_slot, P.W_init_hidden) +
+                                   P.b_init_hidden)
+        init_cell_batch = (T.dot(first_slot, P.W_init_cell) +
+                           P.b_init_cell)
         return (init_cell_batch,
                 init_hidden_batch)
 
@@ -92,7 +89,7 @@ def build_decoder(P, embedding_size, latent_size):
         [cells, hiddens], _ = theano.scan(
             _step,
             sequences=[mask_dst, embeddings],
-            outputs_info=initial(embeddings.shape[1]),
+            outputs_info=initial(embeddings.shape[1], latent),
             non_sequences=[
                 mask_src, latent,
                 W_h_ah, W_e_ah, W_l_ah, b_ah, w_a] + non_sequences,

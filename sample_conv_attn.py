@@ -23,7 +23,7 @@ if __name__ == "__main__":
     )
     init = theano.function(
         inputs=[X_2],
-        outputs=list(initial(1)) + [Z]
+        outputs=list(initial(1, Z)) + [Z]
     )
 
     x = T.ivector('x')
