@@ -55,14 +55,19 @@ def build(P, embedding_size, embedding_count,
     encode = build_encoder(P, embedding_size, latent_size)
     decode = build_decoder(P, embedding_size, latent_size)
 
+    def encode(embeddings, mask):
+        means, stds = encode(embeddings, mask)
+        eps = U.theano_rng.normal(size=stds.shape)
+        samples = means + eps * stds
+        return samples, means, stds
+
     def encode_decode(X_12):
         batch_size = X_12.shape[0] // 2
 
-        mask = T.neq(X_12, -1)
         embeddings = P.embedding[X_12]
-        print "embeddings", embeddings.ndim
-        means, stds = encode(embeddings, mask)
-        print "means", means.ndim
+        mask = T.neq(X_12, -1)
+        _, means, stds = encode(X_12, mask)
+
         mask_1 = mask[:batch_size]
         embeddings_1 = embeddings[:batch_size]
 
@@ -75,7 +80,6 @@ def build(P, embedding_size, embedding_count,
         return (lin_output,
                 Z_1_means, Z_1_stds,
                 Z_2_means, Z_2_stds)
-
 
     def cost(X_12):
         batch_size = X_12.shape[0] // 2
