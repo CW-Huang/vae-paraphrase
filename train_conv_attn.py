@@ -31,7 +31,7 @@ if __name__ == "__main__":
     X_12 = T.imatrix('X_12')
 
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    cost = model_conv_attn.build(
+    cost, _, _, _ = model_conv_attn.build(
         P, embedding_count=len(word2idx) + 2,
         embedding_size=256
     )

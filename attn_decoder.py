@@ -56,14 +56,13 @@ def build_decoder(P, embedding_size, latent_size):
         # prev_hidden: batch_size x hidden_size
         # latent : batch_size x seq_length x feat_size
         # embedding: batch_size x embedding_size
-        print "latent", latent.ndim
+
         attn_hidden = T.tanh(
             T.dot(embedding[:, None, :], W_e_ah) +
             T.dot(prev_hidden[:, None, :], W_h_ah) +
             T.dot(latent, W_l_ah) +
             b_ah
         )
-        print "attn_hidden", attn_hidden.ndim
         attn = softmax(T.dot(attn_hidden, w_a), mask_src)[:, :, None]
         # batch_size x attn_hidden_size
 
@@ -76,7 +75,7 @@ def build_decoder(P, embedding_size, latent_size):
         hidden = T.switch(mask_dest, hidden, prev_hidden)
         return cell, hidden
 
-    def initial(batch_size, latent):
+    def initial(batch_size):
         init_hidden = P.init_hidden
         init_cell = P.init_cell
 
@@ -93,12 +92,24 @@ def build_decoder(P, embedding_size, latent_size):
         [cells, hiddens], _ = theano.scan(
             _step,
             sequences=[mask_dst, embeddings],
-            outputs_info=initial(embeddings.shape[1], latent),
-            non_sequences=[mask_src, latent, W_h_ah, W_e_ah, W_l_ah, b_ah, w_a] + non_sequences,
+            outputs_info=initial(embeddings.shape[1]),
+            non_sequences=[
+                mask_src, latent,
+                W_h_ah, W_e_ah, W_l_ah, b_ah, w_a] + non_sequences,
             strict=True
         )
         return hiddens
-    return decode, initial, _step
+
+    def step(embedding, prev_cell, prev_hidden, mask_src, latent):
+        return _step(
+            [1], embedding,
+            prev_cell, prev_hidden,
+            mask_src, latent,
+            W_h_ah, W_e_ah, W_l_ah, b_ah, w_a,
+            *non_sequences
+        )
+
+    return decode, initial, step
 
 if __name__ == "__main__":
     from theano_toolkit.parameters import Parameters

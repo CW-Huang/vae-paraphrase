@@ -32,7 +32,7 @@ def build_encoder(P, embedding_size, latent_size):
 
 
 def build_decoder(P, embedding_size, latent_size):
-    decode_, _, _ = attn_decoder.build_decoder(
+    decode_, initial, step_ = attn_decoder.build_decoder(
         P,
         embedding_size=embedding_size,
         latent_size=latent_size
@@ -44,7 +44,19 @@ def build_decoder(P, embedding_size, latent_size):
         mask_dst = mask[:, :-1]
         hiddens = decode_(mask_dst, mask_src, embeddings, latent)
         return T.dot(hiddens, P.embedding.T) + P.b_output
-    return decode
+
+    def step(x, prev_cell, prev_hidden, mask_src, latent):
+        cell, hidden = step_(
+            P.embedding[x],
+            prev_cell, prev_hidden,
+            mask_src, latent
+        )
+        probs = T.nnet.softmax(
+            T.dot(hidden, P.embedding.T) + P.b_output
+        )
+        return probs, cell, hidden
+
+    return decode, initial, step
 
 
 def build(P, embedding_size, embedding_count,
@@ -53,9 +65,9 @@ def build(P, embedding_size, embedding_count,
                                   embedding_size)
 
     encode = build_encoder(P, embedding_size, latent_size)
-    decode = build_decoder(P, embedding_size, latent_size)
+    decode, initial, step = build_decoder(P, embedding_size, latent_size)
 
-    def encode(embeddings, mask):
+    def encode_to_latent(embeddings, mask):
         means, stds = encode(embeddings, mask)
         eps = U.theano_rng.normal(size=stds.shape)
         samples = means + eps * stds
@@ -66,7 +78,7 @@ def build(P, embedding_size, embedding_count,
 
         embeddings = P.embedding[X_12]
         mask = T.neq(X_12, -1)
-        _, means, stds = encode(X_12, mask)
+        _, means, stds = encode_to_latent(embeddings, mask)
 
         mask_1 = mask[:batch_size]
         embeddings_1 = embeddings[:batch_size]
@@ -76,7 +88,7 @@ def build(P, embedding_size, embedding_count,
 
         eps = U.theano_rng.normal(size=Z_1_stds.shape)
         Z_1 = Z_1_means + eps * Z_1_stds
-        lin_output = decode(mask_1, embeddings_1, Z_1)
+        lin_output = decode(mask_1, embeddings_1[:, :-1], Z_1)
         return (lin_output,
                 Z_1_means, Z_1_stds,
                 Z_2_means, Z_2_stds)
@@ -93,7 +105,7 @@ def build(P, embedding_size, embedding_count,
             ), axis=(0, 1))
         recon = T.sum(recon_cost(lin_output, X_1[:, 1:].T))
         return recon, kl
-    return cost
+    return cost, encode_to_latent, initial, step
 
 
 def recon_cost(output_lin, labels):

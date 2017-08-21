@@ -2,34 +2,39 @@ import numpy as np
 import theano.tensor as T
 import theano
 from theano_toolkit.parameters import Parameters
-import model
+import model_conv_attn
 import data_io
 
 if __name__ == "__main__":
-    data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
     P = Parameters()
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    _, initial, sample_prior, sample_step = model.build(
+    _, encode_to_latent, initial, step = model_conv_attn.build(
         P,
         embedding_count=len(word2idx) + 2,
         embedding_size=256
     )
 
-    X_1 = T.imatrix('X_1')
     X_2 = T.imatrix('X_2')
-    z_sym = sample_prior(X_2.T)
+    embeddings = P.embedding[X_2]
+
+    Z, _, _ = encode_to_latent(
+        embeddings,
+        T.ones_like(embeddings[:, :, 0])
+    )
     init = theano.function(
         inputs=[X_2],
-        outputs=list(initial(1, z_sym)) + [z_sym]
+        outputs=list(initial(1)) + [Z]
     )
+
     x = T.ivector('x')
-    z = T.matrix('z')
+    Z_ = T.tensor3('Z_')
     prev_cell = T.matrix('prev_cell')
     prev_hidden = T.matrix('prev_hidden')
 
-    step = theano.function(
-        inputs=[z, x, prev_cell, prev_hidden],
-        outputs=sample_step(z, x, prev_cell, prev_hidden)
+    do_step = theano.function(
+        inputs=[x, prev_cell, prev_hidden, Z_],
+        outputs=step(x, prev_cell, prev_hidden,
+                     T.ones_like(Z_[:, :, 0]), Z_)
     )
     P.load('model.pkl')
     line = ("a u.s. army oh-## helicopter made an emergency landing in north" +
@@ -46,7 +51,7 @@ if __name__ == "__main__":
         choices = np.arange(len(word2idx) + 2)
         idx = len(word2idx)
         while True:
-            (probs, cell, hidden) = step(prior_sample, [idx], cell, hidden)
+            (probs, cell, hidden) = do_step([idx], cell, hidden, prior_sample)
             idx = np.random.choice(choices, p=probs[0])
             if idx == len(word2idx) + 1:
                 break
