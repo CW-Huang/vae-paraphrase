@@ -1,12 +1,9 @@
 import numpy as np
-import lstm
 import theano.tensor as T
-import theano
 import vae
-import theano_toolkit.utils as U
-import feedforward
 import bilstm
 import attn_decoder
+
 
 def build_bilstm(P, hidden_size, embedding_size):
     process = bilstm.build(
@@ -65,8 +62,8 @@ def build_encoder(P, embedding_size=256,
         mask_dst = T.ones((memory_size, batch_size))
 
         memory_0 = T.zeros((memory_size, batch_size, embedding_size))
-        memory_1 = decode_memory(mask_dst, mask_1, memory_0, annotation_1)
-        memory_2 = decode_memory(mask_dst, mask_2, memory_1, annotation_2)
+        memory_1 = decode_memory(mask_dst, mask_1, memory_0, 5 * annotation_1)
+        memory_2 = decode_memory(mask_dst, mask_2, memory_1, 5 * annotation_2)
 
         (_, z_prior_means, z_prior_stds) = gaussian_out(memory_1)
         (z_samples, z_means, z_stds) = gaussian_out(memory_2)
@@ -75,6 +72,7 @@ def build_encoder(P, embedding_size=256,
                 z_means, z_stds,
                 z_prior_means, z_prior_stds)
     return encode_12
+
 
 def build_decoder(P, embedding_size,
                   embedding_count,
@@ -117,6 +115,7 @@ def build(P, embedding_size, embedding_count,
         latent_size=latent_size,
         hidden_size=hidden_size
     )
+
     def cost(X_12):
         batch_size = X_12.shape[0] // 2
         X_12 = X_12.T
@@ -128,7 +127,7 @@ def build(P, embedding_size, embedding_count,
         embeddings_1 = embeddings[:, :batch_size, :]
         mask_1 = mask[:, :batch_size]
         X_1 = X_12[:, :batch_size]
-        lin_output = decode(embeddings_1[:-1], mask_1[:-1], z_samples)
+        lin_output = decode(embeddings_1[:-1], mask_1[:-1], 10 * z_samples)
         kl = T.sum(vae.kl_divergence(z_means, z_stds,
                                      z_prior_means, z_prior_stds),
                    axis=(0, 1))
