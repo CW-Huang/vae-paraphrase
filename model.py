@@ -1,12 +1,9 @@
 import numpy as np
-import lstm
 import theano.tensor as T
-import theano
 import vae
-import theano_toolkit.utils as U
-import feedforward
 import bilstm
 import attn_decoder
+
 
 def build_bilstm(P, hidden_size, embedding_size):
     process = bilstm.build(
@@ -87,6 +84,7 @@ def build_encoder(P, embedding_size=256,
 
     return encode_12
 
+
 def build_decoder(P, embedding_size,
                   embedding_count,
                   latent_size=64,
@@ -128,6 +126,7 @@ def build(P, embedding_size, embedding_count,
         latent_size=latent_size,
         hidden_size=hidden_size
     )
+
     def cost(X_12):
         batch_size = X_12.shape[0] // 2
         X_12 = X_12.T
