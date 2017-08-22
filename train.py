@@ -60,8 +60,8 @@ if __name__ == "__main__":
         ),
     )
 
-    P.load('model.pkl')
-    P_train.load('train.pkl')
+    # P.load('model.pkl')
+    # P_train.load('train.pkl')
     i = 0
     for epoch in xrange(20):
         for batch in data_stream(data_location, word2idx):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
                 beta_val = beta.get_value()
                 print "iteration", i
                 print "beta_val", beta_val,
-                if i < 1:
+                if i < 2500:
                     beta_val = np.float32(0.)
                 elif beta_val < np.float32(1):
                     beta_val += np.float32(0.01)
