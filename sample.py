@@ -7,31 +7,46 @@ import data_io
 
 if __name__ == "__main__":
     data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
-    P = Parameters()
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    _, initial, sample_prior, sample_step = model.build(
+    embedding_count=len(word2idx) + 2
+    embedding_size=256
+
+    P = Parameters()
+    P.embedding = np.random.randn(embedding_count, embedding_size)
+    _, encoder = model.build_encoder(
         P,
-        embedding_count=len(word2idx) + 2,
-        embedding_size=256
+        embedding_size=embedding_size,
+        annotation_size=256,
+        latent_size=128
+    )
+    _, initial, decode_step = model.build_decoder(
+        P,
+        embedding_size=embedding_size,
+        embedding_count=embedding_count,
+        latent_size=128,
+        hidden_size=256
     )
 
-    X_1 = T.imatrix('X_1')
+
+
     X_2 = T.imatrix('X_2')
-    z_sym = sample_prior(X_2.T)
+    latent = encoder(P.embedding[X_2.T], T.neq(X_2.T, -1))
     init = theano.function(
         inputs=[X_2],
-        outputs=list(initial(1, z_sym)) + [z_sym]
+        outputs=list(initial(latent)) + [latent]
     )
+    print "Created init function."
+
     x = T.ivector('x')
-    z = T.matrix('z')
+    Z = T.tensor3('Z')
     prev_cell = T.matrix('prev_cell')
     prev_hidden = T.matrix('prev_hidden')
 
     step = theano.function(
-        inputs=[z, x, prev_cell, prev_hidden],
-        outputs=sample_step(z, x, prev_cell, prev_hidden)
+        inputs=[x, prev_cell, prev_hidden, Z],
+        outputs=decode_step(x, prev_cell, prev_hidden, Z)
     )
-    P.load('model.pkl')
+    print "Created sampling function."
     line = ("a u.s. army oh-## helicopter made an emergency landing in north" +
             " korea on saturday , but u.s. officials said they had no confir" +
             "mation of reports out of north korea that the aircraft had been" +

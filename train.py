@@ -35,7 +35,8 @@ if __name__ == "__main__":
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
     beta = theano.shared(np.float32(0))
     cost = model.build(
-        P, embedding_count=len(word2idx) + 2,
+        P,
+        embedding_count=len(word2idx) + 2,
         embedding_size=256
     )
     recon, kl = cost(X_12)
@@ -49,7 +50,10 @@ if __name__ == "__main__":
     P_train = Parameters()
     train = theano.function(
         inputs=[X_12],
-        outputs=[recon / count, kl / T.cast(X_12.shape[0] // 2, 'float32')],
+        outputs=[
+            recon / count,
+            kl / T.cast(X_12.shape[0] // 2, 'float32')
+        ],
         updates=updates.adam(
             parameters, gradients,
             learning_rate=3e-4, P=P_train
