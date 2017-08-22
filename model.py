@@ -65,8 +65,8 @@ def build_encoder(P, embedding_size=256,
         mask_dst = T.ones((memory_size, batch_size))
 
         memory_0 = T.zeros((memory_size, batch_size, embedding_size))
-        memory_1 = decode_memory(mask_dst, mask_1, memory_0, annotation_1)
-        memory_2 = decode_memory(mask_dst, mask_2, memory_1, annotation_2)
+        memory_1 = decode_memory(mask_dst, mask_2, memory_0, annotation_2)
+        memory_2 = decode_memory(mask_dst, mask_1, memory_1, annotation_1)
 
         (_, z_prior_means, z_prior_stds) = gaussian_out(memory_1)
         (z_samples, z_means, z_stds) = gaussian_out(memory_2)
@@ -74,6 +74,17 @@ def build_encoder(P, embedding_size=256,
         return (z_samples,
                 z_means, z_stds,
                 z_prior_means, z_prior_stds)
+        def encode(embeddings, mask, memory_size=5):
+            batch_size = embeddings.shape[1],
+            annotation = annotate(embeddings, mask)
+            mask_dst = T.ones((memory_size, batch_size))
+
+            memory_0 = T.zeros((memory_size, batch_size, embedding_size))
+            memory_1 = decode_memory(mask_dst, mask, memory_0, annotation)
+            (z_samples, _, _) = gaussian_out(memory_1)
+            return z_samples
+
+
     return encode_12
 
 def build_decoder(P, embedding_size,
@@ -129,9 +140,11 @@ def build(P, embedding_size, embedding_count,
         mask_1 = mask[:, :batch_size]
         X_1 = X_12[:, :batch_size]
         lin_output = decode(embeddings_1[:-1], mask_1[:-1], z_samples)
-        kl = T.sum(vae.kl_divergence(z_means, z_stds,
-                                     z_prior_means, z_prior_stds),
-                   axis=(0, 1))
+        kl = T.sum(vae.kl_divergence(
+                z_means, z_stds,
+                z_prior_means, z_prior_stds
+            ), axis=(0, 1)
+        )
         recon = T.sum(recon_cost(lin_output, X_1[1:]))
         return recon, kl
     return cost
