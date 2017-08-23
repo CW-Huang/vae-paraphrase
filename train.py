@@ -18,7 +18,7 @@ def data_stream(data_file, word2idx):
     stream = data_io.randomise(stream, buffer_size=512)
     stream = data_io.sortify(stream, lambda x: x[0].shape[0],
                              buffer_size=256)
-    stream = data_io.batch(stream, batch_size=16)
+    stream = data_io.batch(stream, batch_size=32)
     stream = data_io.randomise(stream, buffer_size=50)
     stream = data_io.arrayify2(stream,
                                start_idx=len(word2idx),
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     X_12 = T.imatrix('X_12')
 
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    beta = theano.shared(np.float32(0))
+    beta = theano.shared(np.float32(1))
     cost = model.build(
         P,
         embedding_count=len(word2idx) + 2,
@@ -60,8 +60,8 @@ if __name__ == "__main__":
         ),
     )
 
-    # P.load('model.pkl')
-    # P_train.load('train.pkl')
+    P.load('model.pkl')
+    P_train.load('train.pkl')
     i = 0
     for epoch in xrange(20):
         for batch in data_stream(data_location, word2idx):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
                 beta_val = beta.get_value()
                 print "iteration", i
                 print "beta_val", beta_val,
-                if i < 2500:
+                if i < 0:
                     beta_val = np.float32(0.)
                 elif beta_val < np.float32(1):
                     beta_val += np.float32(0.01)

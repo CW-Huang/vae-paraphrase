@@ -68,6 +68,8 @@ def build(P, name, embedding_size, annotation_size,
         attn_hidden = T.tanh(
             z + b_ah
         )
+
+        # TODO use tensordot
         attn = softmax(T.dot(attn_hidden, w_a), mask_src,
                        axis=0)[:, :, None]
         # attn_hidden_size x batch_size

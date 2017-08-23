@@ -8,8 +8,8 @@ import data_io
 if __name__ == "__main__":
     data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
-    embedding_count=len(word2idx) + 2
-    embedding_size=256
+    embedding_count = len(word2idx) + 2
+    embedding_size = 256
 
     P = Parameters()
     P.embedding = np.random.randn(embedding_count, embedding_size)
@@ -26,8 +26,6 @@ if __name__ == "__main__":
         latent_size=128,
         hidden_size=256
     )
-
-
 
     X_2 = T.imatrix('X_2')
     latent = encoder(P.embedding[X_2.T], T.neq(X_2.T, -1))
@@ -46,11 +44,9 @@ if __name__ == "__main__":
         inputs=[x, prev_cell, prev_hidden, Z],
         outputs=decode_step(x, prev_cell, prev_hidden, Z)
     )
+    P.load('model.pkl')
     print "Created sampling function."
-    line = ("a u.s. army oh-## helicopter made an emergency landing in north" +
-            " korea on saturday , but u.s. officials said they had no confir" +
-            "mation of reports out of north korea that the aircraft had been" +
-            " shot down .")
+    # TODO build line reader
     unk_idx = len(word2idx)
     input = np.array([[word2idx.get(w, unk_idx) for w in line.split()]],
                      dtype=np.int32)
@@ -61,8 +57,9 @@ if __name__ == "__main__":
         choices = np.arange(len(word2idx) + 2)
         idx = len(word2idx)
         while True:
-            (probs, cell, hidden) = step(prior_sample, [idx], cell, hidden)
-            idx = np.random.choice(choices, p=probs[0])
+            (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
+            # idx = np.random.choice(choices, p=probs[0])
+            idx = np.argmax(probs[0])
             if idx == len(word2idx) + 1:
                 break
             else:

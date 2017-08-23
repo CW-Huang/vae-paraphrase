@@ -110,7 +110,10 @@ def build_decoder(P, embedding_size,
     def decode_step(x, prev_cell, prev_hidden, latent):
         embedding = P.embedding[x]
         mask_src = T.ones_like(latent[:, :, 0])
-        return step(embedding, prev_cell, prev_hidden, mask_src, latent)
+        cell, hidden = step(embedding, prev_cell, prev_hidden,
+                            mask_src, latent)
+        probs = T.nnet.softmax(T.dot(hidden, P.embedding.T) + P.b_output)
+        return probs, cell, hidden
     return decode, initial, decode_step
 
 
