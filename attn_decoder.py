@@ -62,20 +62,21 @@ def build(P, name, embedding_size, annotation_size,
         # prev_hidden: batch_size x hidden_size
         # annotation: seq_length x batch_size x feat_size
         # embedding: batch_size x embedding_size
-        z = T.dot(embedding[None, :, :], W_e_ah)
-        z += T.dot(prev_hidden[None, :, :], W_h_ah)
-        z += T.dot(annotation, W_l_ah)
         attn_hidden = T.tanh(
-            z + b_ah
+            T.dot(embedding[None, :, :], W_e_ah) +
+            T.dot(prev_hidden[None, :, :], W_h_ah) +
+            T.dot(annotation, W_l_ah) +
+            b_ah
         )
 
-        # TODO use tensordot
         attn = softmax(T.dot(attn_hidden, w_a), mask_src,
-                       axis=0)[:, :, None]
+                       axis=0)
         # attn_hidden_size x batch_size
 
-        context = T.sum(annotation * attn, axis=0)
-
+        context = T.batched_dot(
+            attn.dimshuffle(1, 0),
+            annotation.dimshuffle(1, 0, 2)
+        )
         cell, hidden = lstm_step(embedding, context, prev_cell, prev_hidden,
                                  *non_seq)
         cell = T.switch(mask_dest, cell, prev_cell)

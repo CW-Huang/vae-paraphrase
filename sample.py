@@ -4,6 +4,7 @@ import theano
 from theano_toolkit.parameters import Parameters
 import model
 import data_io
+import fileinput
 
 if __name__ == "__main__":
     data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
@@ -48,20 +49,27 @@ if __name__ == "__main__":
     print "Created sampling function."
     # TODO build line reader
     unk_idx = len(word2idx)
-    input = np.array([[word2idx.get(w, unk_idx) for w in line.split()]],
-                     dtype=np.int32)
-    print line
-    print
-    for _ in xrange(5):
-        cell, hidden, prior_sample = init(input)
-        choices = np.arange(len(word2idx) + 2)
-        idx = len(word2idx)
-        while True:
-            (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
-            # idx = np.random.choice(choices, p=probs[0])
-            idx = np.argmax(probs[0])
-            if idx == len(word2idx) + 1:
-                break
-            else:
-                print idx2word[idx],
+    print ">> ",
+    for line in fileinput.input():
+        line = line.strip()
+        tokens = np.array([[word2idx.get(w, unk_idx) for w in line.split()]],
+                          dtype=np.int32)
         print
+        print "Input:", ' '.join(idx2word[idx] for idx in tokens[0])
+        print
+        print "Outputs:"
+        print "--------"
+        for _ in xrange(5):
+            cell, hidden, prior_sample = init(tokens)
+            choices = np.arange(len(word2idx) + 2)
+            idx = len(word2idx)
+            for _ in xrange(200):
+                (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
+                # idx = np.random.choice(choices, p=probs[0])
+                idx = np.argmax(probs[0])
+                if idx == len(word2idx) + 1:
+                    break
+                else:
+                    print idx2word[idx],
+            print
+        print ">> ",
