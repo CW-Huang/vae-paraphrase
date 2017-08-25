@@ -1,9 +1,9 @@
 import numpy as np
 import theano.tensor as T
 import vae
-import bilstm
 import attn_decoder
 import transformer
+
 
 def build_annotator(P, hidden_size, embedding_size):
     layer_count = 6

@@ -13,8 +13,9 @@ def softmax(x, mask, axis=-1):
     assert(x.ndim == output.ndim)
     return output
 
+
 def build_self_attention(P, name, input_size, key_size, heads=1):
-    P['W_%s_query' % name] = np.random.randn(heads, input_size, key_size)
+    P['W_%s_query' % name] = 0 * np.random.randn(heads, input_size, key_size)
     P['W_%s_key' % name] = np.random.randn(heads, input_size, key_size)
     P['w_%s_after' % name] = np.zeros((heads,))
     P['w_%s_before' % name] = np.zeros((heads,))
