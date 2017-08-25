@@ -3,15 +3,30 @@ import theano.tensor as T
 import vae
 import bilstm
 import attn_decoder
+import transformer
 
+def build_annotator(P, hidden_size, embedding_size):
+    layer_count = 6
+    transforms = [None] * layer_count
+    for i in xrange(layer_count):
+        transforms[i] = transformer.build_layer(
+            P, name="trans_%d" % i,
+            input_size=embedding_size,
+            hidden_size=hidden_size,
+            output_size=embedding_size,
+            key_size=32,
+            heads=2
+        )
 
-def build_bilstm(P, hidden_size, embedding_size):
-    process = bilstm.build(
-        P, name="encode",
-        input_size=embedding_size,
-        hidden_size=hidden_size
-    )
-    return process
+    def annotate(X, mask):
+        mask = mask.dimshuffle(1, 0)
+        prev_layer = X.dimshuffle(1, 0, 2)
+        for i in xrange(layer_count):
+            prev_layer = transforms[i](prev_layer, mask)
+        output = prev_layer.dimshuffle(1, 0, 2)
+        return output
+
+    return annotate
 
 
 def build_memory_decoder(P, embedding_size, annotation_size, hidden_size):
@@ -31,7 +46,7 @@ def build_encoder(P, embedding_size=256,
                   annotation_size=256,
                   latent_size=64):
 
-    annotate = build_bilstm(
+    annotate = build_annotator(
         P,
         hidden_size=annotation_size,
         embedding_size=embedding_size,
@@ -56,7 +71,6 @@ def build_encoder(P, embedding_size=256,
         annotations = annotate(embeddings_12, mask_12)
         annotation_1 = annotations[:, :batch_size, :]
         annotation_2 = annotations[:, batch_size:, :]
-
         mask_1 = mask_12[:, :batch_size]
         mask_2 = mask_12[:, batch_size:]
         mask_dst = T.ones((memory_size, batch_size))
@@ -181,14 +195,14 @@ if __name__ == "__main__":
     X_12 = T.as_tensor_variable(
         np.array([
             [  0,  1,  2, -1, -1, -1],
-#            [  0,  1,  2,  3,  4, -1],
-#            [  0,  1,  2,  3, -1, -1],
-#            [  0,  1,  2,  3,  4,  1]
+            [  0,  1,  2,  3,  4, -1],
+            [  0,  1,  2,  3, -1, -1],
+            [  0,  1,  2,  3,  4,  1]
         ]).astype(np.int32)
     )
-    _, encoder = build_encoder(P, embedding_size=20,
+    encoder, _ = build_encoder(P, embedding_size=20,
                                annotation_size=20,
                                latent_size=16)
-    val = encoder(P.embedding[X_12.T], T.neq(X_12.T, -1)).eval()
+    val = encoder(P.embedding[X_12.T], T.neq(X_12.T, -1))[0].eval()
     print val
 
