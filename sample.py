@@ -32,7 +32,7 @@ if __name__ == "__main__":
     latent = encoder(P.embedding[X_2.T], T.neq(X_2.T, -1))
     init = theano.function(
         inputs=[X_2],
-        outputs=list(initial(latent)) + [latent]
+        outputs=list(initial(latent[0])) + [latent]
     )
     print "Created init function."
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
             idx = len(word2idx)
             for _ in xrange(200):
                 (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
-                # idx = np.random.choice(choices, p=probs[0])
+                #idx = np.random.choice(choices, p=probs[0])
                 idx = np.argmax(probs[0])
                 if idx == len(word2idx) + 1:
                     break

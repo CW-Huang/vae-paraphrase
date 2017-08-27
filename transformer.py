@@ -1,5 +1,4 @@
 import numpy as np
-import theano
 import theano.tensor as T
 
 import feedforward
@@ -31,7 +30,6 @@ def build_self_attention(P, name, input_size, key_size, heads=1):
         batch_size = values.shape[0]
         length = values.shape[1]
         # values : batch_size, length, input_size
-        mask = mask[:, :, None]
         query = T.tensordot(values, W_query, axes=(2, 1))
         keys = T.tensordot(values, W_key, axes=(2, 1))
         # query & keys : batch_size, length, heads, key_size
@@ -47,19 +45,24 @@ def build_self_attention(P, name, input_size, key_size, heads=1):
         time = T.cast(T.arange(length), 'float32')
         td = time[None, :] - time[:, None]
         current = T.neq(td, 0)
-        after = w_after[:, None, None] * T.switch(td > 0, td, 0)[None, :, :]
-        before = w_before[:, None, None] * T.switch(td < 0, -td, 0)[None, :, :]
+        after = (w_after[:, None, None] *
+                 T.log(T.switch(td > 0, td, 0) + 1)[None, :, :])
+        before = (w_before[:, None, None] *
+                  T.log(T.switch(td < 0, -td, 0) + 1)[None, :, :])
         outer_dot = T.batched_tensordot(
-            query, keys, axes=(2, 2)).reshape((
-                batch_size, heads, length, length
-            ))
+            query, keys, axes=(2, 2)
+        ).reshape((
+            batch_size, heads, length, length
+        ))
         # outer_dot: batch_size, heads, length, length
         attn = softmax(
             (outer_dot / np.float32(np.sqrt(key_size))) +
-            after +
-            before +
+            after[None, :, :, :] +
+            before[None, :, :, :] +
             b[None, :, None, None],
-            mask and current,
+            (mask[:, None, :, None] and
+             mask[:, None, None, :] and
+             current[None, None, :, :]),
             axis=-1
         )
         # attn : batch_size, heads, length, length
@@ -68,6 +71,7 @@ def build_self_attention(P, name, input_size, key_size, heads=1):
         # output : batch_size, length, heads, input_size
         return output
     return self_attend
+
 
 def build_layer(P, name, input_size, output_size,
                 key_size, hidden_size, heads=1):

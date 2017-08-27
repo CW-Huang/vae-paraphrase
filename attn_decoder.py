@@ -16,35 +16,40 @@ def softmax(x, mask, axis=-1):
 
 def build(P, name, embedding_size, annotation_size,
           hidden_size=256,
-          attn_hidden_size=128):
+          attn_hidden_size=128,
+          init_vector_size=None):
+    if init_vector_size is None:
+        init_vector_size = annotation_size
     lstm_step, non_sequences = lstm.build_step(
         P, name="%s_attn_decoder" % name,
         input_sizes=[embedding_size, annotation_size],
         hidden_size=hidden_size,
     )
 
-    P['W_%s_init_hidden' % name] = feedforward.initial_weights(annotation_size, hidden_size)
+    P['W_%s_init_hidden' % name] = feedforward.initial_weights(
+        init_vector_size, hidden_size)
     P['b_%s_init_hidden' % name] = np.zeros((hidden_size,))
-    P['W_%s_init_cell' % name] = feedforward.initial_weights(annotation_size, hidden_size)
+    P['W_%s_init_cell' % name] = feedforward.initial_weights(
+        init_vector_size, hidden_size)
     P['b_%s_init_cell' % name] = np.zeros((hidden_size,))
-
 
     W_init_hidden = P['W_%s_init_hidden' % name]
     b_init_hidden = P['b_%s_init_hidden' % name]
     W_init_cell = P['W_%s_init_cell' % name]
     b_init_cell = P['b_%s_init_cell' % name]
 
-
     W_val = feedforward.initial_weights(
         input_size=hidden_size + embedding_size + annotation_size,
         output_size=attn_hidden_size
     )
+
     acc = 0
     P['W_%s_hidden_attn_hidden' % name] = W_val[acc:acc + hidden_size]
     acc += hidden_size
     P['W_%s_embedding_attn_hidden' % name] = W_val[acc:acc + embedding_size]
     acc += embedding_size
     P['W_%s_annotation_attn_hidden' % name] = W_val[acc:acc + annotation_size]
+
     P['b_%s_attn_hidden' % name] = np.zeros((attn_hidden_size,))
     P['w_%s_attn_out' % name] = np.zeros((attn_hidden_size,))
 
@@ -83,20 +88,21 @@ def build(P, name, embedding_size, annotation_size,
         hidden = T.switch(mask_dest, hidden, prev_hidden)
         return cell, hidden
 
-    def initial(annotation):
-        first_slot = annotation[0, :]
-        init_hidden_batch = T.tanh(T.dot(first_slot, W_init_hidden) +
+    def initial(init_vector):
+        init_hidden_batch = T.tanh(T.dot(init_vector, W_init_hidden) +
                                    b_init_hidden)
-        init_cell_batch = (T.dot(first_slot, W_init_cell) +
+        init_cell_batch = (T.dot(init_vector, W_init_cell) +
                            b_init_cell)
         return (init_cell_batch,
                 init_hidden_batch)
 
-    def decode(mask_dst, mask_src, embeddings, annotation):
+    def decode(mask_dst, mask_src, embeddings, annotation, init_vector=None):
+        if init_vector is None:
+            init_vector = annotation[0]
         [cells, hiddens], _ = theano.scan(
             _step,
             sequences=[mask_dst[:, :, None], embeddings],
-            outputs_info=initial(annotation),
+            outputs_info=initial(init_vector),
             non_sequences=[
                 mask_src, annotation,
                 W_h_ah, W_e_ah, W_l_ah, b_ah, w_a] + non_sequences,
@@ -120,7 +126,8 @@ if __name__ == "__main__":
     P = Parameters()
     embedding_size = 20
     annotation_size = 30
-    decode, _, _ = build_decoder(P, embedding_size=embedding_size, annotation_size=annotation_size)
+    decode, _, _ = build_decoder(P, embedding_size=embedding_size,
+                                 annotation_size=annotation_size)
 
     latents = T.as_tensor_variable(
         np.random.randn(1, 100, annotation_size).astype(np.float32))

@@ -29,6 +29,47 @@ def build_annotator(P, hidden_size, embedding_size):
     return annotate
 
 
+def build_self_importance(P, hidden_size):
+    P.W_important_picker = 0 * np.random.randn(hidden_size,
+                                               hidden_size)
+
+    def select_important(X, mask):
+        # X : batch_size, length_size, hidden_size
+        # mask : batch_size, length_size
+        transformed_X = T.dot(X, P.W_important_picker)
+        # transformed_X : batch_size, length_size, hidden_size
+        non_diag = T.cast(1 - T.eye(mask.shape[1]), 'int32')
+        score = T.switch(
+            (mask[:, :, None] and
+             mask[:, None, :] and
+             non_diag[None, :, :]),
+            T.batched_tensordot(
+                transformed_X, X,
+                axes=(2, 2)
+            ), 0
+        )
+        # score : batch_size, length_size, length_size
+
+        attention = T.nnet.softmax(T.sum(score, axis=-1))
+        # attention: batch_size, length_size
+
+        selected = T.batched_dot(attention, X)
+        return selected
+
+    return select_important
+
+if __name__ == "__main__":
+    from theano_toolkit.parameters import Parameters
+    from theano_toolkit import hinton
+    P = Parameters()
+    select_important = build_self_importance(P, 20)
+    X = T.as_tensor_variable(np.random.randn(5, 10, 20).astype(np.float32))
+    mask = T.ones((5, 10))
+    attn_val = select_important(X, mask).eval()
+    hinton.plot(attn_val, max_val=1)
+    exit()
+
+
 def build_memory_decoder(P, embedding_size, annotation_size, hidden_size):
     mem_decode, _, _ = attn_decoder.build(
         P, "memory",
@@ -37,8 +78,12 @@ def build_memory_decoder(P, embedding_size, annotation_size, hidden_size):
         hidden_size=embedding_size
     )
 
+    select = build_self_importance(P, hidden_size=annotation_size)
+
     def decode_memory(ann_mask, basis_mask, annotation, basis):
-        return mem_decode(ann_mask, basis_mask, annotation, basis)
+        init_vector = select(annotation.dimshuffle(1, 0, 2),
+                             ann_mask.dimshuffle(1, 0))
+        return mem_decode(ann_mask, basis_mask, annotation, basis, init_vector)
     return decode_memory
 
 
@@ -77,7 +122,8 @@ def build_encoder(P, embedding_size=256,
 
         memory_0 = T.zeros((memory_size, batch_size, embedding_size))
         memory_1 = decode_memory(mask_dst, mask_2, memory_0, annotation_2)
-        memory_2 = decode_memory(mask_dst, mask_1, memory_1, annotation_1)
+        memory_2 = (0.5 * decode_memory(mask_dst, mask_1, memory_1, annotation_1) +
+                    0.5 * memory_1)
 
         (_, z_prior_means, z_prior_stds) = gaussian_out(memory_1)
         (z_samples, z_means, z_stds) = gaussian_out(memory_2)
