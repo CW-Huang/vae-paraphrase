@@ -52,6 +52,8 @@ if __name__ == "__main__":
     print ">> ",
     for line in fileinput.input():
         line = line.strip()
+        if line == "":
+            continue
         tokens = np.array([[word2idx.get(w, unk_idx) for w in line.split()]],
                           dtype=np.int32)
         print
@@ -59,14 +61,16 @@ if __name__ == "__main__":
         print
         print "Outputs:"
         print "--------"
-        for _ in xrange(5):
+        for i in xrange(2):
             cell, hidden, prior_sample = init(tokens)
             choices = np.arange(len(word2idx) + 2)
             idx = len(word2idx)
             for _ in xrange(200):
                 (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
-                #idx = np.random.choice(choices, p=probs[0])
-                idx = np.argmax(probs[0])
+                if i % 2 == 0:
+                    idx = np.random.choice(choices, p=probs[0])
+                else:
+                    idx = np.argmax(probs[0])
                 if idx == len(word2idx) + 1:
                     break
                 else:

@@ -2,31 +2,45 @@ import numpy as np
 import theano.tensor as T
 import vae
 import attn_decoder
-import transformer
+# import transformer
+import bilstm
 
 
 def build_annotator(P, hidden_size, embedding_size):
-    layer_count = 6
-    transforms = [None] * layer_count
-    for i in xrange(layer_count):
-        transforms[i] = transformer.build_layer(
-            P, name="trans_%d" % i,
-            input_size=embedding_size,
-            hidden_size=hidden_size,
-            output_size=embedding_size,
-            key_size=32,
-            heads=2
-        )
-
-    def annotate(X, mask):
-        mask = mask.dimshuffle(1, 0)
-        prev_layer = X.dimshuffle(1, 0, 2)
-        for i in xrange(layer_count):
-            prev_layer = transforms[i](prev_layer, mask)
-        output = prev_layer.dimshuffle(1, 0, 2)
-        return output
-
-    return annotate
+#    layer_count = 3
+#    transforms = [None] * layer_count
+#    transforms[0] = transformer.build_layer(
+#        P, name="trans_%d" % 0,
+#        input_size=embedding_size,
+#        hidden_size=embedding_size * 2,
+#        output_size=hidden_size,
+#        key_size=32,
+#        heads=4
+#    )
+#
+#    for i in xrange(1, layer_count):
+#        transforms[i] = transformer.build_layer(
+#            P, name="trans_%d" % i,
+#            input_size=hidden_size,
+#            hidden_size=hidden_size * 2,
+#            output_size=hidden_size,
+#            key_size=32,
+#            heads=4
+#        )
+#
+#    def annotate(X, mask):
+#        mask = mask.dimshuffle(1, 0)
+#        prev_layer = X.dimshuffle(1, 0, 2)
+#        for i in xrange(layer_count):
+#            prev_layer = transforms[i](prev_layer, mask)
+#        output = prev_layer.dimshuffle(1, 0, 2)
+#        return output
+    process = bilstm.build(
+        P, name="encode",
+        input_size=embedding_size,
+        hidden_size=hidden_size
+    )
+    return process
 
 
 def build_self_importance(P, hidden_size):
@@ -187,6 +201,7 @@ def build(P, embedding_size, embedding_count,
         annotation_size=hidden_size,
         latent_size=latent_size
     )
+
     decode, _, _ = build_decoder(
         P,
         embedding_size=embedding_size,
