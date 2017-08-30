@@ -4,6 +4,7 @@ import vae
 import attn_decoder
 # import transformer
 import bilstm
+import theano_toolkit.utils as U
 
 
 def build_annotator(P, hidden_size, embedding_size):
@@ -72,32 +73,71 @@ def build_self_importance(P, hidden_size):
 
     return select_important
 
-if __name__ == "__main__":
-    from theano_toolkit.parameters import Parameters
-    from theano_toolkit import hinton
-    P = Parameters()
-    select_important = build_self_importance(P, 20)
-    X = T.as_tensor_variable(np.random.randn(5, 10, 20).astype(np.float32))
-    mask = T.ones((5, 10))
-    attn_val = select_important(X, mask).eval()
-    hinton.plot(attn_val, max_val=1)
-    exit()
 
+def build_memory_decoder(P, embedding_size, annotation_size, hidden_size,
+                         latent_size, memory_size=5):
+    hidden_size = embedding_size
+    print embedding_size, latent_size
 
-def build_memory_decoder(P, embedding_size, annotation_size, hidden_size):
-    mem_decode, _, _ = attn_decoder.build(
+    _, initial, step = attn_decoder.build(
         P, "memory",
-        embedding_size,
-        annotation_size,
-        hidden_size=embedding_size
+        input_size=hidden_size + latent_size,
+        annotation_size=annotation_size,
+        hidden_size=hidden_size
     )
 
     select = build_self_importance(P, hidden_size=annotation_size)
 
-    def decode_memory(ann_mask, basis_mask, annotation, basis):
-        init_vector = select(annotation.dimshuffle(1, 0, 2),
-                             ann_mask.dimshuffle(1, 0))
-        return mem_decode(ann_mask, basis_mask, annotation, basis, init_vector)
+    gaussian_out = vae.build_encoder_output(
+        P, name="enc_out",
+        input_size=hidden_size,
+        output_size=latent_size
+    )
+    print hidden_size
+
+
+    def decode_memory(annotation_1, annotation_1_mask,
+                      annotation_2, annotation_2_mask):
+        time_steps, batch_size, annotation_size = annotation_1.shape
+        init_vector_1 = select(annotation_1.dimshuffle(1, 0, 2),
+                               annotation_1_mask.dimshuffle(1, 0))
+        cell_1, hidden_1 = initial(init_vector_1)
+
+        init_vector_2 = select(annotation_2.dimshuffle(1, 0, 2),
+                               annotation_2_mask.dimshuffle(1, 0))
+        cell_2, hidden_2 = initial(init_vector_2)
+
+        prev_latent = T.zeros((batch_size, latent_size))
+
+        means_1, stds_1, samples_2, means_2, stds_2 = [], [], [], [], []
+
+        for i in xrange(memory_size):
+            inputs_1 = T.concatenate([
+                T.zeros((batch_size, embedding_size)),
+                prev_latent
+            ], axis=1)
+            cell_1, hidden_1 = step(inputs_1, cell_1, hidden_1,
+                                    annotation_1_mask, annotation_1)
+            inputs_2 = T.concatenate([
+                hidden_1,
+                prev_latent
+            ], axis=1)
+            cell_2, hidden_2 = step(inputs_2, cell_2, hidden_2,
+                                    annotation_2_mask, annotation_2)
+            _, mean_1, std_1 = gaussian_out(hidden_1)
+            prev_latent, mean_2, std_2 = gaussian_out(hidden_2)
+            means_1.append(mean_1[:, None, :])
+            stds_1.append(std_1[:, None, :])
+            means_2.append(mean_2[:, None, :])
+            stds_2.append(std_2[:, None, :])
+            samples_2.append(prev_latent[:, None, :])
+
+        return (T.concatenate(samples_2, axis=1),
+                T.concatenate(means_2, axis=1),
+                T.concatenate(stds_2, axis=1),
+                T.concatenate(means_1, axis=1),
+                T.concatenate(stds_1, axis=1))
+
     return decode_memory
 
 
@@ -115,13 +155,8 @@ def build_encoder(P, embedding_size=256,
         P,
         embedding_size=embedding_size,
         annotation_size=annotation_size,
-        hidden_size=latent_size
-    )
-
-    gaussian_out = vae.build_encoder_output(
-        P, name="enc_out",
-        input_size=annotation_size,
-        output_size=latent_size
+        hidden_size=latent_size,
+        latent_size=latent_size
     )
 
     def encode_12(embeddings_12, mask_12, memory_size=5):
@@ -132,16 +167,11 @@ def build_encoder(P, embedding_size=256,
         annotation_2 = annotations[:, batch_size:, :]
         mask_1 = mask_12[:, :batch_size]
         mask_2 = mask_12[:, batch_size:]
-        mask_dst = T.ones((memory_size, batch_size))
-
-        memory_0 = T.zeros((memory_size, batch_size, embedding_size))
-        memory_1 = decode_memory(mask_dst, mask_2, memory_0, annotation_2)
-        memory_2 = (0.5 * decode_memory(mask_dst, mask_1, memory_1, annotation_1) +
-                    0.5 * memory_1)
-
-        (_, z_prior_means, z_prior_stds) = gaussian_out(memory_1)
-        (z_samples, z_means, z_stds) = gaussian_out(memory_2)
-
+        (z_samples,
+         z_means, z_stds,
+         z_prior_means, z_prior_stds) = \
+            decode_memory(annotation_1, mask_1,
+                          annotation_2, mask_2)
         return (z_samples,
                 z_means, z_stds,
                 z_prior_means, z_prior_stds)
@@ -165,7 +195,7 @@ def build_decoder(P, embedding_size,
                   hidden_size=256):
     decode_, initial, step = attn_decoder.build(
         P, name="decoder",
-        embedding_size=embedding_size,
+        input_size=embedding_size,
         annotation_size=latent_size,
         hidden_size=hidden_size
     )
@@ -175,7 +205,7 @@ def build_decoder(P, embedding_size,
         hiddens = decode_(
             mask_dst=mask_1,
             mask_src=T.ones_like(latent[:, :, 0]),
-            embeddings=embeddings_1,
+            inputs=embeddings_1,
             annotation=latent
         )
         lin_out = T.dot(hiddens, P.embedding.T) + P.b_output
