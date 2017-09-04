@@ -53,10 +53,10 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
         query_hidden = T.tensordot(query, W_query, axes=(2, 1))
         key_hidden = T.tensordot(key, W_key, axes=(2, 1))
         # query & keys : batch_size, length, heads, hidden_size
-        query = query_hidden.dimshuffle(0, 2, 1, 3).reshape((
+        query_hidden = query_hidden.dimshuffle(0, 2, 1, 3).reshape((
             batch_size * heads, query_length, hidden_size
         ))
-        key = key_hidden.dimshuffle(0, 2, 1, 3).reshape((
+        key_hidden = key_hidden.dimshuffle(0, 2, 1, 3).reshape((
             batch_size * heads, key_length, hidden_size
         ))
 
@@ -72,11 +72,11 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
                       T.log(T.switch(td < 0, -td, 0) + 1)[None, :, :])
 
         outer_dot = T.batched_tensordot(
-            query, key, axes=(2, 2)
+            query_hidden, key_hidden, axes=(2, 2)
         ).reshape((
             batch_size, heads, query_length, key_length
         ))
-        # outer_dot: batch_size * heads, query_length, key_length
+        # outer_dot: batch_size, heads, query_length, key_length
         if temporal_bias:
             overall_mask = current[None, None, :, :]
         else:
@@ -90,11 +90,11 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
 
         attn = transformer.softmax(
             (outer_dot / np.float32(np.sqrt(hidden_size))) +
-            after[None, :, :, :] if temporal_bias else 0 +
-            before[None, :, :, :] if temporal_bias else 0 +
+            (after[None, :, :, :] if temporal_bias else 0) +
+            (before[None, :, :, :] if temporal_bias else 0) +
             b[None, :, None, None],
             overall_mask,
-            axis=-1
+            axis=3
         )
         # attn : batch_size, heads, query_length, key_length
         # values : batch_size, key_length, input_size

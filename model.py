@@ -4,37 +4,37 @@ import vae
 import attn_decoder
 # import transformer
 import bilstm
-
+import attn_iayn_decoder
 
 def build_annotator(P, hidden_size, embedding_size):
-#    layer_count = 3
-#    transforms = [None] * layer_count
-#    transforms[0] = transformer.build_layer(
-#        P, name="trans_%d" % 0,
-#        input_size=embedding_size,
-#        hidden_size=embedding_size * 2,
-#        output_size=hidden_size,
-#        key_size=32,
-#        heads=4
-#    )
-#
-#    for i in xrange(1, layer_count):
-#        transforms[i] = transformer.build_layer(
-#            P, name="trans_%d" % i,
-#            input_size=hidden_size,
-#            hidden_size=hidden_size * 2,
-#            output_size=hidden_size,
-#            key_size=32,
-#            heads=4
-#        )
-#
-#    def annotate(X, mask):
-#        mask = mask.dimshuffle(1, 0)
-#        prev_layer = X.dimshuffle(1, 0, 2)
-#        for i in xrange(layer_count):
-#            prev_layer = transforms[i](prev_layer, mask)
-#        output = prev_layer.dimshuffle(1, 0, 2)
-#        return output
+    # layer_count = 3
+    # transforms = [None] * layer_count
+    # transforms[0] = transformer.build_layer(
+    #     P, name="trans_%d" % 0,
+    #     input_size=embedding_size,
+    #     hidden_size=embedding_size * 2,
+    #     output_size=hidden_size,
+    #     key_size=32,
+    #     heads=4
+    # )
+    #
+    # for i in xrange(1, layer_count):
+    #     transforms[i] = transformer.build_layer(
+    #         P, name="trans_%d" % i,
+    #         input_size=hidden_size,
+    #         hidden_size=hidden_size * 2,
+    #         output_size=hidden_size,
+    #         key_size=32,
+    #         heads=4
+    #     )
+    #
+    # def annotate(X, mask):
+    #     mask = mask.dimshuffle(1, 0)
+    #     prev_layer = X.dimshuffle(1, 0, 2)
+    #     for i in xrange(layer_count):
+    #         prev_layer = transforms[i](prev_layer, mask)
+    #     output = prev_layer.dimshuffle(1, 0, 2)
+    #     return output
     process = bilstm.build(
         P, name="encode",
         input_size=embedding_size,
@@ -195,32 +195,33 @@ def build_decoder(P, embedding_size,
                   embedding_count,
                   latent_size=64,
                   hidden_size=256):
-    decode_, initial, step = attn_decoder.build(
+    decode_ = attn_iayn_decoder.build(
         P, name="decoder",
-        input_size=embedding_size,
-        annotation_size=latent_size,
-        hidden_size=hidden_size
+        embedding_size=embedding_size,
+        hidden_size=embedding_size,
+        latent_size=latent_size,
+        context_size=5
     )
+    P.W_output = np.zeros((embedding_size, embedding_count))
     P.b_output = np.zeros((embedding_count,))
 
     def decode(embeddings_1, mask_1, latent):
         hiddens = decode_(
-            mask_dst=mask_1,
-            mask_src=T.ones_like(latent[:, :, 0]),
-            inputs=embeddings_1,
-            annotation=latent
+            embeddings_1,
+            latent,
+            mask_1
         )
-        lin_out = T.dot(hiddens, P.embedding.T) + P.b_output
+        lin_out = T.dot(hiddens, P.W_output) + P.b_output
         return lin_out
 
-    def decode_step(x, prev_cell, prev_hidden, latent):
-        embedding = P.embedding[x]
-        mask_src = T.ones_like(latent[:, :, 0])
-        cell, hidden = step(embedding, prev_cell, prev_hidden,
-                            mask_src, latent)
-        probs = T.nnet.softmax(T.dot(hidden, P.embedding.T) + P.b_output)
-        return probs, cell, hidden
-    return decode, initial, decode_step
+    # def decode_step(x, prev_cell, prev_hidden, latent):
+    #     embedding = P.embedding[x]
+    #     mask_src = T.ones_like(latent[:, :, 0])
+    #     cell, hidden = step(embedding, prev_cell, prev_hidden,
+    #                         mask_src, latent)
+    #     probs = T.nnet.softmax(T.dot(hidden, P.embedding.T) + P.b_output)
+    #     return probs, cell, hidden
+    return decode, None, None
 
 
 def build(P, embedding_size, embedding_count,

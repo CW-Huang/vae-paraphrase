@@ -5,10 +5,12 @@ import feedforward
 
 
 def softmax(x, mask, axis=-1):
-    k = T.max(T.switch(mask, x, -np.inf),
+    k = T.max(x,  # T.switch(mask, x, -np.inf),
               axis=axis, keepdims=True)
     exp_norm_x = T.switch(mask, T.exp(x - k), 0)
-    output = exp_norm_x / T.sum(exp_norm_x, axis=axis, keepdims=True)
+    sum_exp = T.sum(exp_norm_x, axis=axis, keepdims=True)
+    output = exp_norm_x / T.switch(mask, sum_exp, 1)
+    output = T.switch(mask, output, 0)
     assert(x.ndim == output.ndim)
     return output
 

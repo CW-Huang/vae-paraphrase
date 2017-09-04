@@ -61,16 +61,17 @@ if __name__ == "__main__":
     P_train = Parameters()
     train = theano.function(
         inputs=[X_12],
-        outputs=[
-            recon / count,
-            kl / T.cast(X_12.shape[0] // 2, 'float32')
-        ],
+        outputs=[recon / count,
+                 kl / T.cast(X_12.shape[0] // 2, 'float32')],
+        #outputs={p.name: T.mean(abs(g))
+        #         for p, g in zip(parameters, gradients)},
         updates=updates.adam(
             parameters, gradients,
-            learning_rate=2e-3, P=P_train
+            learning_rate=3e-4, P=P_train
         ),
     )
-
+    # [recon / count,
+    #  kl / T.cast(X_12.shape[0] // 2, 'float32')]
     validate_ = theano.function(
         inputs=[X_12],
         outputs=validation_loss
@@ -90,7 +91,8 @@ if __name__ == "__main__":
     beta.set_value(np.float32(1e-5))
     for epoch in xrange(20):
         for batch in data_stream(data_location, word2idx):
-            print batch.shape, train(batch)
+            print batch.shape
+            pprint(train(batch))
 
             i += 1
             if i % 100 == 0:
