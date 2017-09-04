@@ -20,7 +20,7 @@ if __name__ == "__main__":
         annotation_size=256,
         latent_size=128
     )
-    _, initial, decode_step = model.build_decoder(
+    _, decode_step = model.build_decoder(
         P,
         embedding_size=embedding_size,
         embedding_count=embedding_count,
@@ -32,18 +32,16 @@ if __name__ == "__main__":
     latent = encoder(P.embedding[X_2.T], T.neq(X_2.T, -1))
     init = theano.function(
         inputs=[X_2],
-        outputs=list(initial(latent[0])) + [latent]
+        outputs=latent
     )
     print "Created init function."
 
-    x = T.ivector('x')
+    x = T.imatrix('x')
     Z = T.tensor3('Z')
-    prev_cell = T.matrix('prev_cell')
-    prev_hidden = T.matrix('prev_hidden')
 
     step = theano.function(
-        inputs=[x, prev_cell, prev_hidden, Z],
-        outputs=decode_step(x, prev_cell, prev_hidden, Z)
+        inputs=[x, Z],
+        outputs=decode_step(x.T, Z)
     )
     P.load('val_model.pkl')
     print "Created sampling function."
@@ -54,7 +52,8 @@ if __name__ == "__main__":
         line = line.strip()
         if line == "":
             continue
-        tokens = np.array([[word2idx.get(w, unk_idx) for w in line.split()]],
+        tokens = np.array([[word2idx.get(w, unk_idx)
+                            for w in line.split()]],
                           dtype=np.int32)
         print
         print "Input:", ' '.join(idx2word[idx] for idx in tokens[0])
@@ -62,11 +61,11 @@ if __name__ == "__main__":
         print "Outputs:"
         print "--------"
         for i in xrange(2):
-            cell, hidden, prior_sample = init(tokens)
+            prior_sample = init(tokens)
             choices = np.arange(len(word2idx) + 2)
-            idx = len(word2idx)
+            idxs = [len(word2idx)]
             for _ in xrange(200):
-                (probs, cell, hidden) = step([idx], cell, hidden, prior_sample)
+                probs = step([idxs], prior_sample)
                 if i % 2 == 0:
                     idx = np.random.choice(choices, p=probs[0])
                 else:
@@ -75,5 +74,6 @@ if __name__ == "__main__":
                     break
                 else:
                     print idx2word[idx],
+                    idxs.append(idx)
             print
         print ">> ",

@@ -213,15 +213,16 @@ def build_decoder(P, embedding_size,
         )
         lin_out = T.dot(hiddens, P.W_output) + P.b_output
         return lin_out
-
-    # def decode_step(x, prev_cell, prev_hidden, latent):
-    #     embedding = P.embedding[x]
-    #     mask_src = T.ones_like(latent[:, :, 0])
-    #     cell, hidden = step(embedding, prev_cell, prev_hidden,
-    #                         mask_src, latent)
-    #     probs = T.nnet.softmax(T.dot(hidden, P.embedding.T) + P.b_output)
-    #     return probs, cell, hidden
-    return decode, None, None
+    def decode_step(x, latent):
+        # x : accumulated_idxs x batch_size
+        embeddings = P.embedding[x]
+        hidden = decode_(embeddings, latent,
+                         T.ones_like(x))[-1]
+        probs = T.nnet.softmax(
+            T.dot(hidden, P.W_output) + P.b_output
+        )
+        return probs
+    return decode, decode_step
 
 
 def build(P, embedding_size, embedding_count,
@@ -235,7 +236,7 @@ def build(P, embedding_size, embedding_count,
         latent_size=latent_size
     )
 
-    decode, _, _ = build_decoder(
+    decode, _ = build_decoder(
         P,
         embedding_size=embedding_size,
         embedding_count=embedding_count,
