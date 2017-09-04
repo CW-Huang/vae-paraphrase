@@ -5,7 +5,8 @@ from theano_toolkit.parameters import Parameters
 import model
 import data_io
 import fileinput
-
+import tracker
+from theano_toolkit import hinton
 if __name__ == "__main__":
     data_location = '/data/lisa/data/sheny/ParaNews/train.txt'
     idx2word, word2idx = data_io.load_dictionary('dict.pkl')
@@ -27,7 +28,6 @@ if __name__ == "__main__":
         latent_size=128,
         hidden_size=256
     )
-
     X_2 = T.imatrix('X_2')
     latent = encoder(P.embedding[X_2.T], T.neq(X_2.T, -1))
     init = theano.function(
@@ -38,10 +38,11 @@ if __name__ == "__main__":
 
     x = T.imatrix('x')
     Z = T.tensor3('Z')
-
+    output_probs = decode_step(x.T, Z)
+    attention = tracker.get_variable(P, "decoder_attend_attention")
     step = theano.function(
         inputs=[x, Z],
-        outputs=decode_step(x.T, Z)
+        outputs=[output_probs, attention]
     )
     P.load('val_model.pkl')
     print "Created sampling function."
@@ -64,8 +65,9 @@ if __name__ == "__main__":
             prior_sample = init(tokens)
             choices = np.arange(len(word2idx) + 2)
             idxs = [len(word2idx)]
+            sentence = ""
             for _ in xrange(200):
-                probs = step([idxs], prior_sample)
+                probs, attention = step([idxs], prior_sample)
                 if i % 2 == 0:
                     idx = np.random.choice(choices, p=probs[0])
                 else:
@@ -73,7 +75,8 @@ if __name__ == "__main__":
                 if idx == len(word2idx) + 1:
                     break
                 else:
-                    print idx2word[idx],
+                    sentence += idx2word[idx] + " "
+                    hinton.plot(attention)
                     idxs.append(idx)
             print
         print ">> ",
