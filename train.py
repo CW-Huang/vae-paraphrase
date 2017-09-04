@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parameters = P.values()
     pprint(parameters)
 
-    gradients = updates.clip_deltas(T.grad(loss, wrt=parameters), 20)
+    gradients = updates.clip_deltas(T.grad(loss, wrt=parameters), 5)
     P_train = Parameters()
     train = theano.function(
         inputs=[X_12],
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         ],
         updates=updates.adam(
             parameters, gradients,
-            learning_rate=3e-3, P=P_train
+            learning_rate=2e-3, P=P_train
         ),
     )
 

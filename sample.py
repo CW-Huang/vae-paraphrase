@@ -45,7 +45,7 @@ if __name__ == "__main__":
         inputs=[x, prev_cell, prev_hidden, Z],
         outputs=decode_step(x, prev_cell, prev_hidden, Z)
     )
-    P.load('model.pkl')
+    P.load('val_model.pkl')
     print "Created sampling function."
     # TODO build line reader
     unk_idx = len(word2idx)

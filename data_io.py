@@ -8,14 +8,23 @@ import numpy as np
 def stream(data_file, word2idx):
     unk_idx = len(word2idx)
     for line in open(data_file):
-        lines = line.strip().split('\t')
+        if ("... ..." in line) or ("///" in line):
+            continue
+        lines = line.strip().split('\t ')
+        if len(lines) < 2:
+            continue
         line_idxs = []
-        for line in lines:
-            idxs = np.array([word2idx.get(w, unk_idx) for w in line.split()],
+        for lin in lines:
+            idxs = np.array([word2idx.get(w, unk_idx) for w in lin.split()],
                             dtype=np.int16)
             line_idxs.append(idxs)
-        if len(line_idxs) == 2:
-            yield tuple(line_idxs)
+        if len(line_idxs[0]) < 10 or len(line_idxs[1]) < 10:
+            continue
+        yield tuple(line_idxs)
+
+if __name__ == "__main__":
+    for line in stream('/data/lisa/data/sheny/ParaNews/train.txt', {}):
+        pass
 
 
 def async(stream, queue_size=2):
