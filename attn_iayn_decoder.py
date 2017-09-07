@@ -5,6 +5,7 @@ import feedforward
 import transformer
 import tracker
 
+
 def build_1d_conv(P, name, input_size, output_size, window_size,
                   activation=T.nnet.relu,
                   weight_init=feedforward.relu_init):
@@ -28,8 +29,8 @@ def build_1d_conv(P, name, input_size, output_size, window_size,
 
 def build_attention_transform(P, name, q_size, k_size, hidden_size,
                               heads=1, temporal_bias=False):
-    P['W_%s_query' % name] = 0 * np.random.randn(heads, q_size, hidden_size)
-    P['W_%s_key' % name] = np.random.randn(heads, k_size, hidden_size)
+    P['W_%s_query' % name] = 0.1 * np.random.randn(heads, q_size, hidden_size)
+    P['W_%s_key' % name] = 0.1 * np.random.randn(heads, k_size, hidden_size)
     P['b_%s' % name] = np.zeros((heads,))
 
     W_query = P['W_%s_query' % name]

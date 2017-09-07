@@ -42,9 +42,9 @@ if __name__ == "__main__":
     attention = tracker.get_variable(P, "decoder_attend_attention")
     step = theano.function(
         inputs=[x, Z],
-        outputs=[output_probs, attention]
+        outputs=[output_probs, attention[0, 0, -1]]
     )
-    P.load('val_model.pkl')
+    P.load('model.pkl')
     print "Created sampling function."
     # TODO build line reader
     unk_idx = len(word2idx)
@@ -52,10 +52,10 @@ if __name__ == "__main__":
     for line in fileinput.input():
         line = line.strip()
         if line == "":
+            print ">> ",
             continue
         tokens = np.array([[word2idx.get(w, unk_idx)
-                            for w in line.split()]],
-                          dtype=np.int32)
+                            for w in line.split()]], dtype=np.int32)
         print
         print "Input:", ' '.join(idx2word[idx] for idx in tokens[0])
         print
@@ -66,6 +66,7 @@ if __name__ == "__main__":
             choices = np.arange(len(word2idx) + 2)
             idxs = [len(word2idx)]
             sentence = ""
+            attn_list = []
             for _ in xrange(200):
                 probs, attention = step([idxs], prior_sample)
                 if i % 2 == 0:
@@ -76,7 +77,8 @@ if __name__ == "__main__":
                     break
                 else:
                     sentence += idx2word[idx] + " "
-                    hinton.plot(attention)
+                    attn_list.append(attention)
                     idxs.append(idx)
-            print
+            print sentence
+            hinton.plot(np.array(attn_list).T)
         print ">> ",

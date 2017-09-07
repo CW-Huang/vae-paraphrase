@@ -91,6 +91,12 @@ if __name__ == "__main__":
     beta.set_value(np.float32(1e-5))
     for epoch in xrange(20):
         for batch in data_stream(data_location, word2idx):
+            if i % 10000 == 0:
+                validation_loss = validate()
+                if validation_loss < best_validation:
+                    best_validation = validation_loss
+                    P.save('val_model.pkl')
+                print validation_loss
             print batch.shape
             pprint(train(batch))
 
@@ -112,9 +118,3 @@ if __name__ == "__main__":
                 print "new beta_val", beta_val
                 beta.set_value(beta_val)
 
-            if i % 10000 == 0:
-                validation_loss = validate()
-                if validation_loss < best_validation:
-                    best_validation = validation_loss
-                    P.save('val_model.pkl')
-                print validation_loss
