@@ -44,9 +44,8 @@ if __name__ == "__main__":
         inputs=[x, Z],
         outputs=[output_probs, attention[0, 0, -1]]
     )
-    P.load('model.pkl')
+    P.load('val_model.pkl')
     print "Created sampling function."
-    # TODO build line reader
     unk_idx = len(word2idx)
     print ">> ",
     for line in fileinput.input():
@@ -80,5 +79,5 @@ if __name__ == "__main__":
                     attn_list.append(attention)
                     idxs.append(idx)
             print sentence
-            hinton.plot(np.array(attn_list).T)
+            hinton.plot(np.array(attn_list).T, max_val=1)
         print ">> ",

@@ -2,6 +2,7 @@ import numpy as np
 import theano.tensor as T
 
 import feedforward
+import tracker
 
 
 def softmax(x, mask, axis=-1):
@@ -9,79 +10,102 @@ def softmax(x, mask, axis=-1):
               axis=axis, keepdims=True)
     exp_norm_x = T.switch(mask, T.exp(x - k), 0)
     sum_exp = T.sum(exp_norm_x, axis=axis, keepdims=True)
-    output = exp_norm_x / T.switch(mask, sum_exp, 1)
+    output = exp_norm_x / sum_exp
     output = T.switch(mask, output, 0)
     assert(x.ndim == output.ndim)
     return output
 
 
-def build_self_attention(P, name, input_size, key_size, heads=1):
-    P['W_%s_query' % name] = 0 * np.random.randn(heads, input_size, key_size)
-    P['W_%s_key' % name] = np.random.randn(heads, input_size, key_size)
-    P['w_%s_after' % name] = np.zeros((heads,))
-    P['w_%s_before' % name] = np.zeros((heads,))
+def build_attention_transform(P, name, q_size, k_size, hidden_size,
+                              heads=1, temporal_bias=False):
+    P['W_%s_query' % name] = 0.2 * np.random.randn(heads, q_size, hidden_size)
+    P['W_%s_key' % name] = 0.2 * np.random.randn(heads, k_size, hidden_size)
     P['b_%s' % name] = np.zeros((heads,))
 
     W_query = P['W_%s_query' % name]
     W_key = P['W_%s_key' % name]
-    w_after = P['w_%s_after' % name]
-    w_before = P['w_%s_before' % name]
     b = P['b_%s' % name]
 
-    def self_attend(values, mask):
-        batch_size = values.shape[0]
-        length = values.shape[1]
+    if temporal_bias:
+        P['w_%s_after' % name] = np.zeros((heads,))
+        P['w_%s_before' % name] = np.zeros((heads,))
+        w_after = P['w_%s_after' % name]
+        w_before = P['w_%s_before' % name]
+
+    def attend(query, key, value,
+               query_mask=None,
+               key_mask=None,
+               value_mask=None):
+        batch_size = value.shape[0]
+        query_length = query.shape[1]
+        key_length = key.shape[1]
         # values : batch_size, length, input_size
-        query = T.tensordot(values, W_query, axes=(2, 1))
-        keys = T.tensordot(values, W_key, axes=(2, 1))
-        # query & keys : batch_size, length, heads, key_size
-        query = query.dimshuffle(0, 2, 1, 3).reshape((
-            batch_size * heads, length, key_size
+        query_hidden = T.tensordot(query, W_query, axes=(2, 1))
+        key_hidden = T.tensordot(key, W_key, axes=(2, 1))
+        # query & keys : batch_size, length, heads, hidden_size
+        query_hidden = query_hidden.dimshuffle(0, 2, 1, 3).reshape((
+            batch_size * heads, query_length, hidden_size
         ))
-        keys = keys.dimshuffle(0, 2, 1, 3).reshape((
-            batch_size * heads, length, key_size
+        key_hidden = key_hidden.dimshuffle(0, 2, 1, 3).reshape((
+            batch_size * heads, key_length, hidden_size
         ))
 
-        # query & keys: batch_size * heads, length, key_size
-
-        time = T.cast(T.arange(length), 'float32')
+        # query & keys: batch_size * heads, length, hidden_size
+        time = T.cast(T.arange(key_length), 'float32')
         td = time[None, :] - time[:, None]
         current = T.neq(td, 0)
-        after = (w_after[:, None, None] *
-                 T.log(T.switch(td > 0, td, 0) + 1)[None, :, :])
-        before = (w_before[:, None, None] *
-                  T.log(T.switch(td < 0, -td, 0) + 1)[None, :, :])
-        outer_dot = T.batched_tensordot(
-            query, keys, axes=(2, 2)
-        ).reshape((
-            batch_size, heads, length, length
-        ))
-        # outer_dot: batch_size, heads, length, length
-        attn = softmax(
-            (outer_dot / np.float32(np.sqrt(key_size))) +
-            after[None, :, :, :] +
-            before[None, :, :, :] +
-            b[None, :, None, None],
-            (mask[:, None, :, None] and
-             mask[:, None, None, :] and
-             current[None, None, :, :]),
-            axis=-1
-        )
-        # attn : batch_size, heads, length, length
 
-        output = T.batched_dot(attn, values).dimshuffle(0, 2, 1, 3)
-        # output : batch_size, length, heads, input_size
+        if temporal_bias:
+            after = (w_after[:, None, None] *
+                     T.log(T.switch(td > 0, td, 0) + 1)[None, :, :])
+            before = (w_before[:, None, None] *
+                      T.log(T.switch(td < 0, -td, 0) + 1)[None, :, :])
+
+        outer_dot = T.batched_tensordot(
+            query_hidden, key_hidden, axes=(2, 2)
+        ).reshape((
+            batch_size, heads, query_length, key_length
+        ))
+        # outer_dot: batch_size, heads, query_length, key_length
+        if temporal_bias:
+            overall_mask = current[None, None, :, :]
+        else:
+            overall_mask = T.ones((
+                batch_size, query_length, key_length
+            ))[:, None, :, :]
+        if query_mask is not None:
+            overall_mask = overall_mask and query_mask[:, None, :, None]
+        if key_mask is not None:
+            overall_mask = overall_mask and key_mask[:, None, None, :]
+
+        attn = softmax(
+            (outer_dot / np.float32(np.sqrt(hidden_size))) +
+            (after[None, :, :, :] if temporal_bias else 0) +
+            (before[None, :, :, :] if temporal_bias else 0) +
+            b[None, :, None, None],
+            overall_mask,
+            axis=3
+        )
+        tracker.track_variable(P, '%s_attention' % name, attn)
+        # attn : batch_size, heads, query_length, key_length
+        # values : batch_size, key_length, input_size
+        output = T.batched_tensordot(
+            attn, value, axes=(3, 1)
+        ).dimshuffle(0, 2, 1, 3)
+        # output : batch_size, query_length, heads, input_size
         return output
-    return self_attend
+    return attend
 
 
 def build_layer(P, name, input_size, output_size,
                 key_size, hidden_size, heads=1):
-    self_attend = build_self_attention(
+    self_attend = build_attention_transform(
         P, name="%s_attn" % name,
-        input_size=input_size,
-        key_size=key_size,
-        heads=heads
+        q_size=input_size,
+        k_size=input_size,
+        hidden_size=key_size,
+        heads=heads,
+        temporal_bias=True
     )
 
     layer_transform = feedforward.build_classifier(
@@ -99,7 +123,13 @@ def build_layer(P, name, input_size, output_size,
         if mask is None:
             mask = T.ones_like(X[:, :, 0])
 
-        selected = self_attend(X, mask)
+        selected = self_attend(
+            query=X,
+            key=X,
+            value=X,
+            query_mask=mask,
+            key_mask=mask
+        )
         selected = selected.reshape((
             selected.shape[0],
             selected.shape[1], -1
@@ -126,4 +156,3 @@ if __name__ == "__main__":
     )
     print P.values()
     print transform(X).eval().shape
-

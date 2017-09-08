@@ -3,7 +3,6 @@ import theano.tensor as T
 
 import feedforward
 import transformer
-import tracker
 
 
 def build_1d_conv(P, name, input_size, output_size, window_size,
@@ -97,7 +96,6 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
             overall_mask,
             axis=3
         )
-        tracker.track_variable(P, '%s_attention' % name, attn)
         # attn : batch_size, heads, query_length, key_length
         # values : batch_size, key_length, input_size
         output = T.sum(
@@ -117,7 +115,7 @@ def build(P, name, embedding_size, hidden_size, latent_size, context_size=5):
         window_size=context_size
     )
 
-    attend = build_attention_transform(
+    attend = transformer.build_attention_transform(
         P, name="%s_attend" % name,
         q_size=hidden_size,
         k_size=latent_size,

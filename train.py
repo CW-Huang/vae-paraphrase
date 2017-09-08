@@ -108,7 +108,7 @@ if __name__ == "__main__":
                 beta_val = beta.get_value()
                 print "iteration", i
                 print "beta_val", beta_val,
-                if i < 5000:
+                if i < 40000:
                     beta_val = np.float32(1e-5)
                 elif beta_val < np.float32(1):
                     beta_val += np.float32(0.01)
@@ -117,4 +117,3 @@ if __name__ == "__main__":
                     beta_val = np.float32(1)
                 print "new beta_val", beta_val
                 beta.set_value(beta_val)
-

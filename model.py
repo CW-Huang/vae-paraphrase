@@ -8,15 +8,15 @@ import attn_iayn_decoder
 
 
 def build_annotator(P, hidden_size, embedding_size):
-    layer_count = 6
+    layer_count = 4
     transforms = [None] * layer_count
     transforms[0] = transformer.build_layer(
         P, name="trans_%d" % 0,
         input_size=embedding_size,
-        hidden_size=embedding_size * 2,
+        hidden_size=hidden_size,
         output_size=hidden_size,
-        key_size=32,
-        heads=4
+        key_size=64,
+        heads=2
     )
 
     for i in xrange(1, layer_count):
