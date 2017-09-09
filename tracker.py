@@ -16,3 +16,7 @@ def get_variable(P, name):
         if P_list[pid] is P:
             break
     return variables[pid, name]
+
+def list():
+    from pprint import pprint
+    pprint(variables)

@@ -17,7 +17,8 @@ def softmax(x, mask, axis=-1):
 
 
 def build_attention_transform(P, name, q_size, k_size, hidden_size,
-                              heads=1, temporal_bias=False):
+                              heads=1, temporal_bias=False,
+                              generation_mask=False):
     P['W_%s_query' % name] = 0.2 * np.random.randn(heads, q_size, hidden_size)
     P['W_%s_key' % name] = 0.2 * np.random.randn(heads, k_size, hidden_size)
     P['b_%s' % name] = np.zeros((heads,))
@@ -53,30 +54,50 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
         # query & keys: batch_size * heads, length, hidden_size
         time = T.cast(T.arange(key_length), 'float32')
         td = time[None, :] - time[:, None]
-        current = T.neq(td, 0)
-
+        not_current = T.neq(td, 0)
+        after_mask = td > 0
+        before_mask = td < 0
         if temporal_bias:
             after = (w_after[:, None, None] *
-                     T.log(T.switch(td > 0, td, 0) + 1)[None, :, :])
+                     T.log(T.switch(after_mask, td, 0) + 1)[None, :, :])
             before = (w_before[:, None, None] *
-                      T.log(T.switch(td < 0, -td, 0) + 1)[None, :, :])
+                      T.log(T.switch(before_mask, -td, 0) + 1)[None, :, :])
 
         outer_dot = T.batched_tensordot(
             query_hidden, key_hidden, axes=(2, 2)
         ).reshape((
             batch_size, heads, query_length, key_length
         ))
+
         # outer_dot: batch_size, heads, query_length, key_length
+        overall_mask = None
+        if generation_mask:
+            overall_mask = (
+                before_mask[None, None, :, :]
+                if overall_mask is None else
+                T.and_(overall_mask, before_mask[None, None, :, :])
+            )
+
         if temporal_bias:
-            overall_mask = current[None, None, :, :]
-        else:
-            overall_mask = T.ones((
-                batch_size, query_length, key_length
-            ))[:, None, :, :]
+            overall_mask = (
+                not_current[None, None, :, :]
+                if overall_mask is None else
+                T.and_(overall_mask, not_current[None, None, :, :])
+            )
+
         if query_mask is not None:
-            overall_mask = overall_mask and query_mask[:, None, :, None]
+            overall_mask = (
+                query_mask[:, None, :, None]
+                if overall_mask is None else
+                T.and_(overall_mask, query_mask[:, None, :, None])
+            )
+
         if key_mask is not None:
-            overall_mask = overall_mask and key_mask[:, None, None, :]
+            overall_mask = (
+                key_mask[:, None, None, :]
+                if overall_mask is None else
+                T.and_(overall_mask, key_mask[:, None, None, :])
+            )
 
         attn = softmax(
             (outer_dot / np.float32(np.sqrt(hidden_size))) +
@@ -121,7 +142,7 @@ def build_layer(P, name, input_size, output_size,
 
     def transform(X, mask=None):
         if mask is None:
-            mask = T.ones_like(X[:, :, 0])
+            mask = T.cast(T.ones_like(X[:, :, 0]), 'bool')
 
         selected = self_attend(
             query=X,
@@ -152,7 +173,7 @@ if __name__ == "__main__":
         output_size=13,
     )
     X = T.as_tensor_variable(
-        np.random.randn(2, 20, 10)
+        np.random.randn(2, 5, 10)
     )
     print P.values()
     print transform(X).eval().shape
