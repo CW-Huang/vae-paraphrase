@@ -202,7 +202,6 @@ def build_decoder(P, embedding_size,
         latent_size=latent_size,
         context_size=5
     )
-    P.W_output = np.zeros((embedding_size, embedding_count))
     P.b_output = np.zeros((embedding_count,))
 
     def decode(embeddings_1, mask_1, latent):
@@ -211,7 +210,7 @@ def build_decoder(P, embedding_size,
             latent,
             mask_1
         )
-        lin_out = T.dot(hiddens, P.W_output) + P.b_output
+        lin_out = T.dot(hiddens, P.embedding.T) + P.b_output
         return lin_out
 
     def decode_step(x, latent):
@@ -220,7 +219,7 @@ def build_decoder(P, embedding_size,
         hidden = decode_(embeddings, latent,
                          T.ones_like(x))[-1]
         probs = T.nnet.softmax(
-            T.dot(hidden, P.W_output) + P.b_output
+            T.dot(hidden, P.embedding.T) + P.b_output
         )
         return probs
     return decode, decode_step
