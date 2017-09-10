@@ -19,8 +19,8 @@ def softmax(x, mask, axis=-1):
 def build_attention_transform(P, name, q_size, k_size, hidden_size,
                               heads=1, temporal_bias=False,
                               generation_mask=False):
-    P['W_%s_query' % name] = 0.2 * np.random.randn(heads, q_size, hidden_size)
-    P['W_%s_key' % name] = 0.2 * np.random.randn(heads, k_size, hidden_size)
+    P['W_%s_query' % name] = 0.3 * np.random.randn(heads, q_size, hidden_size)
+    P['W_%s_key' % name] = 0.3 * np.random.randn(heads, k_size, hidden_size)
     P['b_%s' % name] = np.zeros((heads,))
 
     W_query = P['W_%s_query' % name]
@@ -59,9 +59,9 @@ def build_attention_transform(P, name, q_size, k_size, hidden_size,
         before_mask = td < 0
         if temporal_bias:
             after = (w_after[:, None, None] *
-                     T.log(T.switch(after_mask, td, 0) + 1)[None, :, :])
+                     T.switch(after_mask, td, 0)[None, :, :])
             before = (w_before[:, None, None] *
-                      T.log(T.switch(before_mask, -td, 0) + 1)[None, :, :])
+                      T.switch(before_mask, -td, 0)[None, :, :])
 
         outer_dot = T.batched_tensordot(
             query_hidden, key_hidden, axes=(2, 2)

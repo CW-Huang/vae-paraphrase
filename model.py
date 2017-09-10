@@ -16,7 +16,7 @@ def build_annotator(P, hidden_size, embedding_size):
         hidden_size=hidden_size,
         output_size=hidden_size,
         key_size=64,
-        heads=2
+        heads=4
     )
 
     for i in xrange(1, layer_count):
@@ -25,7 +25,7 @@ def build_annotator(P, hidden_size, embedding_size):
             input_size=hidden_size,
             hidden_size=hidden_size * 2,
             output_size=hidden_size,
-            key_size=32,
+            key_size=64,
             heads=4
         )
 
